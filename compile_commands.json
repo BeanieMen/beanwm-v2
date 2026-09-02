@@ -1,18 +1,17 @@
 [
   {
-    "file": "src/main.c",
-    "arguments": [
-      "/usr/bin/gcc",
-      "-Wall",
-      "-Wextra",
-      "-Wpedantic",
-      "-std=c23",
-      "-O3",
-      "src/main.c",
-      "-o",
-      "build/beanwm"
-    ],
     "directory": "/home/beanie/beanwm-v2",
-    "output": "build/beanwm"
+    "arguments": ["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-O3","-Iinclude","-c","src/tile.cpp","-o","build/tile.o"],
+    "file": "src/tile.cpp"
+  },
+  {
+    "directory": "/home/beanie/beanwm-v2",
+    "arguments": ["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-O3","-Iinclude","-c","src/main.cpp","-o","build/main.o"],
+    "file": "src/main.cpp"
+  },
+  {
+    "directory": "/home/beanie/beanwm-v2",
+    "arguments": ["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-O3","-Iinclude","-c","src/client.cpp","-o","build/client.o"],
+    "file": "src/client.cpp"
   }
 ]

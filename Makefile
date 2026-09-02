@@ -1,6 +1,6 @@
 CXX = g++
 
-CXXFLAGS = -Wall -Wextra -Wpedantic -std=c++23 -O3
+CXXFLAGS = -Wall -Wextra -Wpedantic -std=c++23 -O3 -Iinclude
 LDLIBS = -lX11
 
 TARGET = build/beanwm
