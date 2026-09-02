@@ -67,64 +67,30 @@ void tile(Display *display, Client *clients)
 
         int new_index = area_count;
 
-        areas[area_count - 1].client = areas[area_count - 1].client;
-
-        if (area_count % 2 == 1)
-        {
-            // Vertical split:
-            //
-            // +---------+-----+
-            // |         | new |
-            // |   old   |     |
-            // |         |     |
-            // +---------+-----+
-
+        if (area_count % 2 == 1){
+            // Split vertically
             int new_width = old.width / 2;
-
-            areas[area_count - 1].width =
-                old.width - new_width;
-
+            areas[area_count - 1].width = new_width;
+            areas[new_index].width = new_width;
             areas[new_index].client = c;
-            areas[new_index].x =
-                old.x + old.width - new_width;
-            areas[new_index].y =
-                old.y;
-            areas[new_index].width =
-                new_width;
-            areas[new_index].height =
-                old.height;
-        }
-        else
-        {
-            // Horizontal split:
-            //
-            // +-------------+
-            // |     old     |
-            // +-------------+
-            // |     new     |
-            // +-------------+
+            areas[new_index].x = old.x + new_width;
+            areas[new_index].y = old.y;
+            areas[new_index].height = old.height;
 
+        } else {
+            // Split horizontally
             int new_height = old.height / 2;
-
-            areas[area_count - 1].height =
-                old.height - new_height;
-
+            areas[area_count - 1].height = new_height;
+            areas[new_index].height = new_height;
             areas[new_index].client = c;
-            areas[new_index].x =
-                old.x;
-            areas[new_index].y =
-                old.y + old.height - new_height;
-            areas[new_index].width =
-                old.width;
-            areas[new_index].height =
-                new_height;
+            areas[new_index].x = old.x;
+            areas[new_index].y = old.y + new_height;
+            areas[new_index].width = old.width;
         }
-
         area_count++;
         c = c->next;
     }
 
-    // Apply the calculated areas.
     for (int i = 0; i < area_count; i++)
     {
         XMoveResizeWindow(
