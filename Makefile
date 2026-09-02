@@ -1,6 +1,12 @@
 CXX = g++
 
-CXXFLAGS = -Wall -Wextra -Wpedantic -std=c++23 -O3 -Iinclude
+CXXFLAGS = -Wall -Wextra -Wpedantic -std=c++23 -g -O0 \
+           -fsanitize=address,undefined \
+           -fno-omit-frame-pointer
+
+CPPFLAGS = -Iinclude
+
+LDFLAGS = -fsanitize=address,undefined
 LDLIBS = -lX11
 
 TARGET = build/beanwm
@@ -10,7 +16,7 @@ SRC = $(wildcard src/*.cpp)
 
 $(TARGET): $(SRC)
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS) $(LDLIBS)
 
 run: $(TARGET)
 	./$(TARGET)
@@ -19,4 +25,4 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 test: $(TARGET)
-	DISPLAY=:2 ./$(TARGET) 
+	DISPLAY=:2 ./$(TARGET)

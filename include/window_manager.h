@@ -3,15 +3,35 @@
 #include "types.h"
 
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 
+#include <algorithm>
+#include <functional>
+#include <vector>
 
 class WindowManager
 {
 private:
+    static constexpr int WORKSPACE_COUNT = 9;
+
+    using KeyAction = std::function<void()>;
+
+    struct KeyBinding
+    {
+        unsigned int modifiers;
+        KeySym key;
+        KeyAction action;
+    };
+
     Display *display;
     Window root;
     XEvent event;
-    Client *clients;
+
+    std::vector<Client> clients;
+
+    int current_workspace;
+    unsigned int MOD_MASK = Mod4Mask;
+    std::vector<KeyBinding> keybindings;
 
 public:
     // Opens the X11 display and initializes the window manager.
@@ -26,6 +46,9 @@ public:
 private:
     // Configures X11 event masks and keyboard shortcuts.
     void setup();
+
+    // Configures keyboard shortcuts.
+    void setupKeybindings();
 
     // Receives the current X11 event and dispatches it to a handler.
     void handleEvent();
@@ -56,4 +79,25 @@ private:
 
     // Calculates and applies the current tiling layout.
     void tile();
+
+    // Switches to another workspace.
+    void switchWorkspace(int workspace);
+
+    // Moves the focused window to another workspace.
+    void moveToWorkspace(int workspace);
+
+    // Shows all windows belonging to a workspace.
+    void showWorkspace(int workspace);
+
+    // Hides all windows belonging to a workspace.
+    void hideWorkspace(int workspace);
+
+    // Finds a client by its window.
+    Client *findClient(Window window);
+
+    // Handles asynchronous X11 errors.
+    static int handleXError(
+        Display *display,
+        XErrorEvent *error_event
+    );
 };
