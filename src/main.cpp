@@ -13,6 +13,17 @@ struct Client
     Client *next;
 };
 
+typedef struct Area Area;
+
+struct Area
+{
+    Client *client;
+    int x;
+    int y;
+    int width;
+    int height;
+};
+
 void tile(Display *display, Client *clients)
 {
     int screen_width = DisplayWidth(display, 0);
@@ -28,17 +39,107 @@ void tile(Display *display, Client *clients)
     if (count == 0)
     {
         return;
-    };
-
-    int height = screen_height / count;
-    int y = 0;
-
-    for (Client *c = clients; c != NULL; c = c->next)
-    {
-        XMoveResizeWindow(display, c->window, 0, y, screen_width, height);
-        y += height;
     }
-};
+
+    Area *areas = (Area *)malloc(sizeof(Area) * count);
+
+    if (areas == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for areas\n");
+        return;
+    }
+
+    // Start with the entire screen.
+    areas[0].client = clients;
+    areas[0].x = 0;
+    areas[0].y = 0;
+    areas[0].width = screen_width;
+    areas[0].height = screen_height;
+
+    int area_count = 1;
+
+    Client *c = clients->next;
+
+    while (c != NULL)
+    {
+        // Split the most recently created area.
+        Area old = areas[area_count - 1];
+
+        int new_index = area_count;
+
+        areas[area_count - 1].client = areas[area_count - 1].client;
+
+        if (area_count % 2 == 1)
+        {
+            // Vertical split:
+            //
+            // +---------+-----+
+            // |         | new |
+            // |   old   |     |
+            // |         |     |
+            // +---------+-----+
+
+            int new_width = old.width / 2;
+
+            areas[area_count - 1].width =
+                old.width - new_width;
+
+            areas[new_index].client = c;
+            areas[new_index].x =
+                old.x + old.width - new_width;
+            areas[new_index].y =
+                old.y;
+            areas[new_index].width =
+                new_width;
+            areas[new_index].height =
+                old.height;
+        }
+        else
+        {
+            // Horizontal split:
+            //
+            // +-------------+
+            // |     old     |
+            // +-------------+
+            // |     new     |
+            // +-------------+
+
+            int new_height = old.height / 2;
+
+            areas[area_count - 1].height =
+                old.height - new_height;
+
+            areas[new_index].client = c;
+            areas[new_index].x =
+                old.x;
+            areas[new_index].y =
+                old.y + old.height - new_height;
+            areas[new_index].width =
+                old.width;
+            areas[new_index].height =
+                new_height;
+        }
+
+        area_count++;
+        c = c->next;
+    }
+
+    // Apply the calculated areas.
+    for (int i = 0; i < area_count; i++)
+    {
+        XMoveResizeWindow(
+            display,
+            areas[i].client->window,
+            areas[i].x,
+            areas[i].y,
+            areas[i].width,
+            areas[i].height);
+    }
+
+    free(areas);
+
+    XSync(display, False);
+}
 
 int main(void)
 {
@@ -51,7 +152,6 @@ int main(void)
     }
 
     printf("Connected to display: %s\n", DisplayString(display));
-    const char *display_name = DisplayString(display);
     Window root = DefaultRootWindow(display);
     XEvent event;
     Client *clients = NULL;
@@ -66,7 +166,7 @@ int main(void)
         GrabModeAsync,
         GrabModeAsync);
 
-    XSelectInput(display, root, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
+    XSelectInput(display, root, EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
     XSync(display, False);
     while (1)
     {
@@ -91,6 +191,8 @@ int main(void)
             client->next = clients;
             clients = client;
 
+            XSelectInput(display, window, EnterWindowMask);
+
             XMoveResizeWindow(display, window, 100, 100, 800, 600);
             XMapWindow(display, window);
             XSetInputFocus(display, window, RevertToPointerRoot, CurrentTime);
@@ -99,8 +201,14 @@ int main(void)
         }
         case CreateNotify:
         {
-            printf("Window created: %lu\n",
-                   event.xcreatewindow.window);
+            printf(
+                "Window created: %lu, parent: %lu\n",
+                event.xcreatewindow.window,
+                event.xcreatewindow.parent);
+            for (Client *c = clients; c != NULL; c = c->next)
+            {
+                printf("Client window: %lu\n", c->window);
+            }
             break;
         }
 
@@ -116,11 +224,11 @@ int main(void)
                     Client *to_delete = *current;
                     *current = (*current)->next;
                     free(to_delete);
+                    tile(display, clients);
                     break;
                 }
                 current = &((*current)->next);
             }
-            tile(display, clients);
             break;
         }
 
@@ -130,25 +238,22 @@ int main(void)
                 (event.xkey.state & Mod1Mask))
             {
                 printf("Spawning Alacritty on %s\n", DisplayString(display));
+
                 if (fork() == 0)
                 {
-                    // 1. Force X11 display target
-                    setenv("DISPLAY", DisplayString(display), 1);
-
-                    // 2. Clear Wayland display variable so apps don't bypass Xephyr
-                    unsetenv("WAYLAND_DISPLAY");
-
-                    // 3. Force backend drivers to X11
-                    setenv("WINIT_UNIX_BACKEND", "x11", 1); // For Rust/Winit (Alacritty)
-                    setenv("GDK_BACKEND", "x11", 1);        // For GTK apps
-                    setenv("QT_QPA_PLATFORM", "x11", 1);    // For Qt apps
-
-                    execlp("alacritty", "alacritty", NULL);
+                    execlp("alacritty", "alacritty", (char *)NULL);
 
                     perror("execlp");
                     _exit(1);
-                };
-            };
+                }
+            }
+
+            break;
+        }
+        case EnterNotify:
+        {
+            Window window = event.xcrossing.window;
+            XSetInputFocus(display, window, RevertToPointerRoot, CurrentTime);
             break;
         };
         };
