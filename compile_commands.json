@@ -1,0 +1,18 @@
+[
+  {
+    "file": "src/main.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-std=c23",
+      "-O3",
+      "src/main.c",
+      "-o",
+      "build/beanwm"
+    ],
+    "directory": "/home/beanie/beanwm-v2",
+    "output": "build/beanwm"
+  }
+]
