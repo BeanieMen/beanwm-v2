@@ -14,6 +14,10 @@ struct Client
     Window window;
     int workspace;
     ManagementMode mode;
+    int x;
+    int y;
+    int width;
+    int height;
 };
 
 struct Area
@@ -26,4 +30,4 @@ struct Area
     int height;
 };
 
-void dwindleTile(Display *display, const std::vector<Client> &clients, int gap, int workspace);
+void dwindleTile(Display *display, std::vector<Client> &clients, int gap, int workspace);

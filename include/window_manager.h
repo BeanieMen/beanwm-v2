@@ -13,8 +13,6 @@ class WindowManager
 {
 private:
     static constexpr int WORKSPACE_COUNT = ::WORKSPACE_COUNT;
-    static constexpr int DEFAULT_GAP = ::GAP;
-    static constexpr unsigned int DEFAULT_MODKEY = ::MODKEY;
     int current_workspace;
 
     enum
@@ -45,6 +43,14 @@ private:
     std::vector<Client> floatingClients;
     std::vector<KeyBinding> keybindings;
 
+    Window draggedWindow = None;
+    Window dragTarget = None;
+    int dragStartX = 0;
+    int dragStartY = 0;
+    int dragWindowX = 0;
+    int dragWindowY = 0;
+    bool dragIsFloating = false;
+
 public:
     WindowManager();
     ~WindowManager();
@@ -59,10 +65,12 @@ private:
 
     void handleEvent();
     void handleMapRequest();
-    void handleCreateNotify();
     void handleDestroyNotify();
     void handleKeyPress();
     void handleEnterNotify();
+    void handleButtonPress();
+    void handleMotionNotify();
+    void handleButtonRelease();
 
     void spawnTerminal();
     void spawnProcess(const std::string &command);
@@ -72,6 +80,7 @@ private:
 
     void tile();
     void switchTileWinToFloating(Window &window);
+    void updateClientGeometry(Client &client);
 
     void switchWorkspace(int workspace);
     void moveToWorkspace(int workspace);

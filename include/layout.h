@@ -7,7 +7,7 @@
 
 void dwindleTile(
     Display *display,
-    const std::vector<Client> &clients,
+    std::vector<Client> &clients,
     int gap,
     int workspace
 );
