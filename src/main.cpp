@@ -1,4 +1,4 @@
-#include "window_manager.h"
+#include "managers/window_manager.h"
 
 int main() {
     WindowManager wm;

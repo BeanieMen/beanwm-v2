@@ -1,10 +1,9 @@
 #include "window_manager.h"
-#include "layout.h"
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
-
 #include <utility>
+
 static bool wm_detected = false;
 static int detectError(Display *, XErrorEvent *e)
 {
@@ -13,7 +12,7 @@ static int detectError(Display *, XErrorEvent *e)
     return 0;
 }
 
-WindowManager::WindowManager() : display(nullptr), root(0), tiledClients{}, floatingClients{}
+WindowManager::WindowManager() : display(nullptr), root(0)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
@@ -45,7 +44,7 @@ void WindowManager::run()
 
 void WindowManager::setup()
 {
-    current_workspace = 1;
+    clientManager.setCurrentWorkspace(1);
     XSetErrorHandler(detectError);
     XSelectInput(display, root, SubstructureRedirectMask | SubstructureNotifyMask);
     XSync(display, False);
@@ -67,7 +66,7 @@ void WindowManager::setup()
             XWindowAttributes attributes{};
             if (!XGetWindowAttributes(display, children[i], &attributes) || attributes.override_redirect)
                 continue;
-            addClient(children[i], MODE_TILED);
+            clientManager.addClient(children[i], MODE_TILED);
             XSelectInput(display, children[i], EnterWindowMask);
         }
         if (children)
@@ -75,19 +74,8 @@ void WindowManager::setup()
     }
     XSetInputFocus(display, root, RevertToPointerRoot, CurrentTime);
     tile();
-    setupKeybindings();
-
-    XUngrabKey(display, AnyKey, AnyModifier, root);
-    for (auto &b : keybindings)
-    {
-        KeyCode c = XKeysymToKeycode(display, b.key);
-        if (!c)
-            continue;
-        XGrabKey(display, c, b.modifiers, root, False, GrabModeAsync, GrabModeAsync);
-        XGrabKey(display, c, b.modifiers | LockMask, root, False, GrabModeAsync, GrabModeAsync);
-        XGrabKey(display, c, b.modifiers | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
-        XGrabKey(display, c, b.modifiers | LockMask | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
-    }
+    keybindingManager.setupKeybindings();
+    keybindingManager.grabKeys(display, root);
 
     XUngrabButton(display, AnyButton, AnyModifier, root);
     auto grabBtn = [&](unsigned int mod)
@@ -101,120 +89,24 @@ void WindowManager::setup()
     XSync(display, False);
 }
 
-void WindowManager::addClient(Window w, ManagementMode mode)
+void WindowManager::tile()
 {
-    if (findClient(w))
-        return;
-    if (mode == MODE_TILED)
-        tiledClients.push_back(Client{w, current_workspace, MODE_TILED, 0, 0, 800, 600, 0});
-    else
-        floatingClients.push_back(Client{w, current_workspace, MODE_FLOATING, 0, 0, 800, 600, 0});
-    updateClientNumbers();
+    layoutManager.tile(display, clientManager);
 }
 
-bool WindowManager::removeClient(Window w)
+void WindowManager::switchWorkspace(int ws)
 {
-    for (auto it = tiledClients.begin(); it != tiledClients.end(); ++it)
-    {
-        if (it->window == w)
-        {
-            tiledClients.erase(it);
-            updateClientNumbers();
-            return true;
-        }
-    }
-    for (auto it = floatingClients.begin(); it != floatingClients.end(); ++it)
-    {
-        if (it->window == w)
-        {
-            floatingClients.erase(it);
-            updateClientNumbers();
-            return true;
-        }
-    }
-    return false;
+    clientManager.switchWorkspace(display, ws, [this]() {
+        tile();
+    });
 }
 
-Client *WindowManager::findClient(Window w)
+void WindowManager::moveToWorkspace(int ws)
 {
-    for (auto &c : tiledClients)
-        if (c.window == w)
-            return &c;
-    for (auto &c : floatingClients)
-        if (c.window == w)
-            return &c;
-    return nullptr;
+    clientManager.moveToWorkspace(display, root, ws, [this]() {
+        tile();
+    });
 }
-
-void WindowManager::updateClientNumbers()
-{
-    int number = 0;
-    for (auto &client : tiledClients)
-    {
-        if (client.workspace == current_workspace)
-            client.number = ++number;
-        else
-            client.number = 0;
-    }
-    for (auto &client : floatingClients)
-    {
-        if (client.workspace == current_workspace)
-            client.number = ++number;
-        else
-            client.number = 0;
-    }
-}
-
-int WindowManager::getWindowNumber(Window w)
-{
-    Client *c = findClient(w);
-    return c ? c->number : 0;
-}
-
-void WindowManager::handleButtonPress()
-{
-    if (event.xbutton.button != Button1)
-        return;
-
-    Window w = event.xbutton.subwindow;
-
-    if (w == None || w == root)
-        return;
-
-    Client *c = findClient(w);
-    if (!c)
-        return;
-
-    // Start dragging
-    draggedWindow = w;
-    dragTarget = None;
-
-    dragStartX = event.xbutton.x_root;
-    dragStartY = event.xbutton.y_root;
-
-    dragWindowX = c->x;
-    dragWindowY = c->y;
-
-    dragIsFloating = (c->mode == MODE_FLOATING);
-
-    // Grab pointer so we continue receiving MotionNotify
-    // and ButtonRelease even when the pointer leaves the window.
-    XGrabPointer(
-        display,
-        root,
-        False,
-        ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
-        GrabModeAsync,
-        GrabModeAsync,
-        None,
-        None,
-        CurrentTime
-    );
-
-    XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
-    XRaiseWindow(display, w);
-}
-
 
 void WindowManager::handleEvent()
 {
@@ -253,7 +145,7 @@ void WindowManager::handleMapRequest()
     XWindowAttributes attributes{};
     if (XGetWindowAttributes(display, w, &attributes) && attributes.override_redirect)
         return;
-    addClient(w, MODE_TILED);
+    clientManager.addClient(w, MODE_TILED);
     XSelectInput(display, w, EnterWindowMask);
     XMapWindow(display, w);
     XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
@@ -263,7 +155,7 @@ void WindowManager::handleMapRequest()
 void WindowManager::handleConfigureRequest()
 {
     XConfigureRequestEvent &request = event.xconfigurerequest;
-    Client *client = findClient(request.window);
+    Client *client = clientManager.findClient(request.window);
     if (!client)
     {
         XWindowChanges changes{request.x, request.y, request.width, request.height,
@@ -285,8 +177,13 @@ void WindowManager::handleConfigureRequest()
 
 void WindowManager::handleDestroyNotify()
 {
-    if (removeClient(event.xdestroywindow.window))
+    if (clientManager.removeClient(event.xdestroywindow.window))
         tile();
+}
+
+void WindowManager::handleKeyPress()
+{
+    keybindingManager.handleKeyPress(display, event, *this);
 }
 
 void WindowManager::handleEnterNotify()
@@ -297,11 +194,52 @@ void WindowManager::handleEnterNotify()
     XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
 }
 
+void WindowManager::handleButtonPress()
+{
+    if (event.xbutton.button != Button1)
+        return;
+
+    Window w = event.xbutton.subwindow;
+
+    if (w == None || w == root)
+        return;
+
+    Client *c = clientManager.findClient(w);
+    if (!c)
+        return;
+
+    draggedWindow = w;
+    dragTarget = None;
+
+    dragStartX = event.xbutton.x_root;
+    dragStartY = event.xbutton.y_root;
+
+    dragWindowX = c->x;
+    dragWindowY = c->y;
+
+    dragIsFloating = (c->mode == MODE_FLOATING);
+
+    XGrabPointer(
+        display,
+        root,
+        False,
+        ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+        GrabModeAsync,
+        GrabModeAsync,
+        None,
+        None,
+        CurrentTime
+    );
+
+    XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
+    XRaiseWindow(display, w);
+}
+
 void WindowManager::handleMotionNotify()
 {
     if (draggedWindow == None)
         return;
-    Client *c = findClient(draggedWindow);
+    Client *c = clientManager.findClient(draggedWindow);
     if (!c)
         return;
     if (dragIsFloating)
@@ -317,6 +255,8 @@ void WindowManager::handleMotionNotify()
     {
         int px = event.xmotion.x_root;
         int py = event.xmotion.y_root;
+        int current_workspace = clientManager.getCurrentWorkspace();
+        auto &tiledClients = clientManager.getTiledClients();
 
         Client *hover = nullptr;
         for (auto &client : tiledClients)
@@ -346,8 +286,8 @@ void WindowManager::handleMotionNotify()
 
             if (srcIdx != -1 && tgtIdx != -1)
             {
-                int srcNum = getWindowNumber(draggedWindow);
-                int tgtNum = getWindowNumber(targetWin);
+                int srcNum = clientManager.getWindowNumber(draggedWindow);
+                int tgtNum = clientManager.getWindowNumber(targetWin);
                 fprintf(stderr, "[drag] swap window %d (id 0x%lx) with window %d (id 0x%lx) at %d,%d\n",
                         srcNum, draggedWindow, tgtNum, targetWin, px, py);
                 fflush(stderr);
@@ -366,14 +306,14 @@ void WindowManager::handleButtonRelease()
     if (event.xbutton.button != Button1 || draggedWindow == None)
         return;
 
-    Client *c = findClient(draggedWindow);
+    Client *c = clientManager.findClient(draggedWindow);
     if (c && dragIsFloating)
     {
-        updateClientGeometry(*c);
+        clientManager.updateClientGeometry(display, *c);
     }
     else if (c && !dragIsFloating)
     {
-        int srcNum = getWindowNumber(draggedWindow);
+        int srcNum = clientManager.getWindowNumber(draggedWindow);
         fprintf(stderr, "[drag] release window %d (id 0x%lx)\n", srcNum, draggedWindow);
         fflush(stderr);
         XSetInputFocus(display, draggedWindow, RevertToPointerRoot, CurrentTime);
@@ -387,109 +327,6 @@ void WindowManager::handleButtonRelease()
     XFlush(display);
 }
 
-void WindowManager::spawnTerminal() { spawnProcess(TERMINAL); }
-void WindowManager::spawnProcess(const std::string &cmd)
-{
-    if (fork() == 0)
-    {
-        execlp(cmd.c_str(), cmd.c_str(), nullptr);
-        perror(cmd.c_str());
-        _exit(127);
-    }
-}
-
-void WindowManager::tile()
-{
-    updateClientNumbers();
-    dwindleTile(display, tiledClients, GAP, current_workspace);
-    for (auto &c : floatingClients)
-    {
-        if (c.workspace == current_workspace)
-        {
-            XMoveResizeWindow(display, c.window, c.x, c.y, c.width, c.height);
-            XRaiseWindow(display, c.window);
-            XMapWindow(display, c.window);
-        }
-        else
-            XUnmapWindow(display, c.window);
-    }
-}
-
-void WindowManager::switchTileWinToFloating(Window &w)
-{
-    Client *c = findClient(w);
-    if (!c || c->mode != MODE_TILED)
-        return;
-    updateClientGeometry(*c);
-    Client saved = *c;
-    removeClient(w);
-    saved.mode = MODE_FLOATING;
-    floatingClients.push_back(saved);
-    tile();
-}
-
-void WindowManager::updateClientGeometry(Client &c)
-{
-    XWindowAttributes a{};
-    if (XGetWindowAttributes(display, c.window, &a))
-    {
-        c.x = a.x;
-        c.y = a.y;
-        c.width = a.width;
-        c.height = a.height;
-    }
-}
-
-void WindowManager::switchWorkspace(int ws)
-{
-    if (ws < 1 || ws > WORKSPACE_COUNT || ws == current_workspace)
-        return;
-    hideWorkspace(current_workspace);
-    current_workspace = ws;
-    showWorkspace(current_workspace);
-    tile();
-}
-void WindowManager::moveToWorkspace(int ws)
-{
-    if (ws < 1 || ws > WORKSPACE_COUNT)
-        return;
-    Window f = 0;
-    int r = 0;
-    XGetInputFocus(display, &f, &r);
-    if (f == None || f == root)
-        return;
-    Client *c = findClient(f);
-    if (!c)
-        return;
-    int old = c->workspace;
-    c->workspace = ws;
-    if (old != current_workspace && ws == current_workspace)
-        XMapWindow(display, c->window);
-    else if (old == current_workspace && ws != current_workspace)
-        XUnmapWindow(display, c->window);
-    if (ws == current_workspace)
-        showWorkspace(current_workspace);
-    tile();
-}
-void WindowManager::showWorkspace(int ws)
-{
-    for (auto &c : tiledClients)
-        if (c.workspace == ws)
-            XMapWindow(display, c.window);
-    for (auto &c : floatingClients)
-        if (c.workspace == ws)
-            XMapWindow(display, c.window);
-}
-void WindowManager::hideWorkspace(int ws)
-{
-    for (auto &c : tiledClients)
-        if (c.workspace == ws)
-            XUnmapWindow(display, c.window);
-    for (auto &c : floatingClients)
-        if (c.workspace == ws)
-            XUnmapWindow(display, c.window);
-}
-
 int WindowManager::handleXError(Display *d, XErrorEvent *e)
 {
     if (e->error_code == BadAccess || e->error_code == BadWindow)
@@ -499,6 +336,7 @@ int WindowManager::handleXError(Display *d, XErrorEvent *e)
     fprintf(stderr, "X Error: %s req=%d min=%d res=0x%lx\n", buf, e->request_code, e->minor_code, e->resourceid);
     return 0;
 }
+
 Window WindowManager::GetFocusedWindow()
 {
     Window f = 0;

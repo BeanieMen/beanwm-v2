@@ -1,10 +1,10 @@
+#include "keybinding_manager.h"
 #include "window_manager.h"
-#include "config.h"
 #include <X11/XKBlib.h>
 #include <cstdlib>
 #include <unistd.h>
 
-static std::string trim(const std::string& value)
+static std::string trim(const std::string &value)
 {
     size_t start = value.find_first_not_of(" \t\r\n");
     if (start == std::string::npos)
@@ -13,7 +13,7 @@ static std::string trim(const std::string& value)
     return value.substr(start, end - start + 1);
 }
 
-static int parseWorkspaceNumber(const std::string& value)
+static int parseWorkspaceNumber(const std::string &value)
 {
     try {
         return value.empty() ? 1 : std::stoi(value);
@@ -23,8 +23,7 @@ static int parseWorkspaceNumber(const std::string& value)
     }
 }
 
-
-bool WindowManager::parseKeyBinding(
+bool KeybindingManager::parseKeyBinding(
     const std::string &combo,
     const std::string &action_string,
     KeyBinding &binding)
@@ -41,9 +40,9 @@ bool WindowManager::parseKeyBinding(
     if (key == NoSymbol) return false;
 
     binding.key = key;
-
     binding.modifiers = mod_part.empty() ? 0 : parseModString(mod_part);
     std::string action = trim(action_string);
+
     if (action == "exec terminal" || action == "exec term")
         binding.action = ACTION_SPAWN_TERMINAL;
     else if (action.rfind("workspace", 0) == 0) {
@@ -65,7 +64,7 @@ bool WindowManager::parseKeyBinding(
     return binding.action != -1;
 }
 
-void WindowManager::setupKeybindings()
+void KeybindingManager::setupKeybindings()
 {
     keybindings.clear();
     keybindings.reserve(sizeof(DEFAULT_BINDS) / sizeof(DEFAULT_BINDS[0]));
@@ -76,7 +75,22 @@ void WindowManager::setupKeybindings()
     }
 }
 
-void WindowManager::handleKeyPress()
+void KeybindingManager::grabKeys(Display *display, Window root)
+{
+    XUngrabKey(display, AnyKey, AnyModifier, root);
+    for (auto &b : keybindings)
+    {
+        KeyCode c = XKeysymToKeycode(display, b.key);
+        if (!c)
+            continue;
+        XGrabKey(display, c, b.modifiers, root, False, GrabModeAsync, GrabModeAsync);
+        XGrabKey(display, c, b.modifiers | LockMask, root, False, GrabModeAsync, GrabModeAsync);
+        XGrabKey(display, c, b.modifiers | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
+        XGrabKey(display, c, b.modifiers | LockMask | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
+    }
+}
+
+void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowManager &wm)
 {
     KeySym k = XLookupKeysym(&event.xkey, 0);
     unsigned int m = event.xkey.state & CLEANMASK;
@@ -85,14 +99,14 @@ void WindowManager::handleKeyPress()
         if (b.key != k || b.modifiers != m) continue;
 
         if (b.action == ACTION_SPAWN_TERMINAL) {
-            spawnTerminal();
+            wm.getProcessManager().spawnTerminal();
         } else if (b.action == ACTION_SWITCH_WORKSPACE) {
-            switchWorkspace(b.arg);
+            wm.switchWorkspace(b.arg);
         } else if (b.action == ACTION_MOVE_WORKSPACE) {
-            moveToWorkspace(b.arg);
+            wm.moveToWorkspace(b.arg);
         } else if (b.action == ACTION_KILL) {
-            Window focused = GetFocusedWindow();
-            Client *client = findClient(focused);
+            Window focused = wm.GetFocusedWindow();
+            Client *client = wm.getClientManager().findClient(focused);
             if (!client) return;
             Atom delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
             Atom protocols_atom = XInternAtom(display, "WM_PROTOCOLS", False);
@@ -117,26 +131,21 @@ void WindowManager::handleKeyPress()
                 XKillClient(display, client->window);
             }
         } else if (b.action == ACTION_FLOAT) {
-            Window focused = GetFocusedWindow();
-            Client *client = findClient(focused);
-            if (client && client->mode == MODE_TILED) {
-                switchTileWinToFloating(client->window);
-            }
+            Window focused = wm.GetFocusedWindow();
+            wm.getClientManager().switchTileWinToFloating(display, focused, [&wm]() {
+                wm.tile();
+            });
         } else if (b.action == ACTION_QUIT) {
             if (display) XCloseDisplay(display);
             exit(0);
         } else if (b.action == ACTION_EXEC && !b.cmd.empty()) {
-            if (fork() == 0) {
-                execlp(b.cmd.c_str(), b.cmd.c_str(), nullptr);
-                _exit(127);
-            }
+            wm.getProcessManager().spawnProcess(b.cmd);
         }
         return;
     }
 }
 
-
-unsigned int WindowManager::parseModString(const std::string &s)
+unsigned int KeybindingManager::parseModString(const std::string &s)
 {
     unsigned int modifiers = 0;
     size_t start = 0;
@@ -159,7 +168,7 @@ unsigned int WindowManager::parseModString(const std::string &s)
     return modifiers;
 }
 
-KeySym WindowManager::parseKeyString(const std::string &s)
+KeySym KeybindingManager::parseKeyString(const std::string &s)
 {
     std::string text = trim(s);
     for (auto &entry : KEY_ENTRIES)
