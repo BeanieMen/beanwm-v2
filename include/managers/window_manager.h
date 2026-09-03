@@ -45,9 +45,12 @@ public:
     void moveToWorkspace(int workspace);
 
     Window GetFocusedWindow();
+    void rebuildAndReload();
 
 private:
     void setup();
+    void saveState();
+    bool restoreState();
     void handleEvent();
     void handleMapRequest();
     void handleConfigureRequest();

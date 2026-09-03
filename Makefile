@@ -79,4 +79,7 @@ run: release
 test: release
 	DISPLAY=:2 ./$(TARGET)
 
-.PHONY: release debug install uninstall clean run test
+package:
+	BUILDDIR=/tmp/makepkg-beanwm PKGDEST=/tmp/makepkg-beanwm SRCDEST=/tmp/makepkg-beanwm makepkg -si -c
+
+.PHONY: release debug install uninstall clean run test package

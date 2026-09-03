@@ -1,16 +1,30 @@
 #include "window_manager.h"
 #include "config_manager.h"
 #include "helpers/strut_helper.h"
+#include "helpers/string_helper.h"
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
 #include <utility>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <cctype>
 
 static bool wm_detected = false;
 static int detectError(Display *, XErrorEvent *e)
 {
     if (e->error_code == BadAccess) wm_detected = true;
     return 0;
+}
+
+static std::string getStateFilePath(Display *display)
+{
+    std::string disp = XDisplayString(display);
+    for (char &c : disp) {
+        if (!isalnum(static_cast<unsigned char>(c))) c = '_';
+    }
+    return "/tmp/.beanwm_state_" + disp;
 }
 
 WindowManager::WindowManager() : display(nullptr), root(0)
@@ -38,6 +52,152 @@ void WindowManager::run()
     }
 }
 
+void WindowManager::saveState()
+{
+    std::string path = getStateFilePath(display);
+    std::ofstream out(path);
+    if (!out.is_open())
+    {
+        fprintf(stderr, "[beanwm] Could not save state to %s\n", path.c_str());
+        return;
+    }
+
+    out << "WORKSPACE " << clientManager.getCurrentWorkspace() << "\n";
+
+    for (const auto &c : clientManager.getTiledClients())
+    {
+        out << "TILED " << c.window << " " << c.workspace << "\n";
+    }
+
+    for (const auto &c : clientManager.getFloatingClients())
+    {
+        out << "FLOATING " << c.window << " " << c.workspace << " "
+            << c.x << " " << c.y << " " << c.width << " " << c.height << "\n";
+    }
+
+    out.close();
+    fprintf(stderr, "[beanwm] Saved state to %s\n", path.c_str());
+}
+
+bool WindowManager::restoreState()
+{
+    std::string path = getStateFilePath(display);
+    if (!std::filesystem::exists(path)) return false;
+
+    std::ifstream in(path);
+    if (!in.is_open()) return false;
+
+    fprintf(stderr, "[beanwm] Restoring state from %s...\n", path.c_str());
+
+    std::string line;
+    int restoredWorkspace = 1;
+    bool hasWorkspace = false;
+
+    while (std::getline(in, line))
+    {
+        line = trim(line);
+        if (line.empty()) continue;
+
+        std::stringstream ss(line);
+        std::string type;
+        ss >> type;
+
+        if (type == "WORKSPACE")
+        {
+            if (ss >> restoredWorkspace) hasWorkspace = true;
+        }
+        else if (type == "TILED")
+        {
+            Window w = 0;
+            int ws = 1;
+            if (ss >> w >> ws)
+            {
+                XWindowAttributes a{};
+                if (XGetWindowAttributes(display, w, &a))
+                {
+                    clientManager.getTiledClients().push_back(
+                        Client{w, ws, MODE_TILED, a.x, a.y, a.width, a.height, 0});
+                    XSelectInput(display, w, EnterWindowMask);
+                }
+            }
+        }
+        else if (type == "FLOATING")
+        {
+            Window w = 0;
+            int ws = 1, x = 0, y = 0, width = 800, height = 600;
+            if (ss >> w >> ws >> x >> y >> width >> height)
+            {
+                XWindowAttributes a{};
+                if (XGetWindowAttributes(display, w, &a))
+                {
+                    clientManager.getFloatingClients().push_back(
+                        Client{w, ws, MODE_FLOATING, x, y, width, height, 0});
+                    XSelectInput(display, w, EnterWindowMask);
+                }
+            }
+        }
+    }
+
+    in.close();
+    std::filesystem::remove(path);
+
+    if (hasWorkspace)
+        clientManager.setCurrentWorkspace(restoredWorkspace);
+
+    return true;
+}
+
+void WindowManager::rebuildAndReload()
+{
+    fprintf(stderr, "[beanwm] Rebuild & reload requested...\n");
+
+    std::string sourceDir;
+    std::string cwd = std::filesystem::current_path().string();
+
+    if (std::filesystem::exists(cwd + "/Makefile")) {
+        sourceDir = cwd;
+    } else if (std::filesystem::exists("/home/beanie/beanwm-v2/Makefile")) {
+        sourceDir = "/home/beanie/beanwm-v2";
+    } else {
+        char selfBuf[1024] = {0};
+        ssize_t len = readlink("/proc/self/exe", selfBuf, sizeof(selfBuf) - 1);
+        if (len > 0) {
+            std::filesystem::path p(selfBuf);
+            if (p.parent_path().filename() == "build") {
+                sourceDir = p.parent_path().parent_path().string();
+            } else {
+                sourceDir = p.parent_path().string();
+            }
+        }
+    }
+
+    if (sourceDir.empty() || !std::filesystem::exists(sourceDir + "/Makefile")) {
+        fprintf(stderr, "[beanwm] Error: Cannot locate Makefile for rebuilding\n");
+        return;
+    }
+
+    std::string buildCmd = "make -C \"" + sourceDir + "\" release";
+    int ret = system(buildCmd.c_str());
+    if (ret != 0) {
+        fprintf(stderr, "[beanwm] Rebuild failed (code %d). Reload aborted.\n", ret);
+        return;
+    }
+
+    fprintf(stderr, "[beanwm] Rebuild successful! Preserving state & reloading...\n");
+
+    saveState();
+
+    std::string targetBin = sourceDir + "/build/beanwm";
+    if (!std::filesystem::exists(targetBin)) {
+        targetBin = "/usr/bin/beanwm";
+    }
+
+    char *args[] = { const_cast<char*>(targetBin.c_str()), nullptr };
+    execv(targetBin.c_str(), args);
+
+    fprintf(stderr, "[beanwm] Error: execv failed for %s\n", targetBin.c_str());
+}
+
 void WindowManager::setup()
 {
     ConfigManager::instance().load();
@@ -54,9 +214,14 @@ void WindowManager::setup()
         exit(1);
     }
 
+    XSetWindowBackground(display, root, BlackPixel(display, DefaultScreen(display)));
+    XClearWindow(display, root);
+
     XSelectInput(display, root,
         EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask |
         KeyPressMask | PropertyChangeMask | ExposureMask);
+
+    bool restored = restoreState();
 
     Window parent;
     Window *children = nullptr;
@@ -68,10 +233,23 @@ void WindowManager::setup()
             if (isDockWindow(display, children[i])) continue;
             XWindowAttributes a{};
             if (!XGetWindowAttributes(display, children[i], &a)) continue;
+            if (a.override_redirect || a.map_state != IsViewable) continue;
+
+            if (restored && clientManager.findClient(children[i])) continue;
+
             clientManager.addClient(children[i], MODE_TILED);
             XSelectInput(display, children[i], EnterWindowMask);
         }
         if (children) XFree(children);
+    }
+
+    int currentWs = clientManager.getCurrentWorkspace();
+    for (int ws = 1; ws <= ConfigManager::instance().get().workspaceCount; ++ws)
+    {
+        if (ws == currentWs)
+            clientManager.showWorkspace(display, ws);
+        else
+            clientManager.hideWorkspace(display, ws);
     }
 
     XSetInputFocus(display, root, RevertToPointerRoot, CurrentTime);
@@ -80,9 +258,12 @@ void WindowManager::setup()
     keybindingManager.setupKeybindings();
     keybindingManager.grabKeys(display, root);
 
-    for (const auto &cmd : ConfigManager::instance().get().autostart)
+    if (!restored)
     {
-        processManager.spawnProcess(cmd);
+        for (const auto &cmd : ConfigManager::instance().get().autostart)
+        {
+            processManager.spawnProcess(cmd);
+        }
     }
 
     unsigned int modKey = ConfigManager::instance().get().modKey;
