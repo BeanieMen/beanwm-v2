@@ -42,6 +42,26 @@ gh release create "$LATEST_TAG" \
     --title "beanwm $LATEST_TAG" \
     --generate-notes
 
+# Isolated build directory for makepkg / updpkgsums
+BUILD_TMP="/tmp/makepkg-beanwm"
+rm -rf "$BUILD_TMP"
+mkdir -p "$BUILD_TMP"
+
+# Wait briefly for GitHub release archive to be available
+sleep 2
+
+# Automatically fetch latest release tarball and update sha256sums in PKGBUILD
+echo "Updating checksums for $LATEST_TAG..."
+BUILDDIR="$BUILD_TMP" PKGDEST="$BUILD_TMP" SRCDEST="$BUILD_TMP" updpkgsums
+
+# Commit & push updated checksums so repo PKGBUILD is always valid
+git add PKGBUILD
+git commit -m "chore: update sha256sums for $LATEST_TAG" || true
+git push "$REMOTE" "$BRANCH"
+
+# Build and install package using isolated BUILDDIR
+BUILDDIR="$BUILD_TMP" PKGDEST="$BUILD_TMP" SRCDEST="$BUILD_TMP" makepkg -si -c
+
 echo
 echo "======================================"
 echo " Updated release: $LATEST_TAG"
