@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=BeanWM
+Comment=A minimal dwindle-tiling X11 window manager written in C++23
+Exec=beanwm
+Type=XSession
+DesktopNames=BeanWM

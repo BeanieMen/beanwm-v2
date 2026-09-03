@@ -24,13 +24,15 @@ TARGET    = build/beanwm
 BUILD_DIR = build
 OBJ_DIR   = build/obj
 
+# All translation units — discovers subdirectories automatically
 SRC = src/main.cpp \
       $(wildcard src/managers/*.cpp) \
       $(wildcard src/helpers/*.cpp)
 
-# Map src/**/*.cpp → build/obj/**/*o preserving subdirectory structure
+# Map src/**/*.cpp → build/obj/**/*.o preserving subdirectory structure
 OBJ = $(patsubst src/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 
+# ── Targets ────────────────────────────────────────────────────────────────
 
 .DEFAULT_GOAL := release
 
@@ -42,22 +44,31 @@ debug: CXXFLAGS := $(CXXFLAGS_DEBUG)
 debug: LDFLAGS  := $(LDFLAGS_DEBUG)
 debug: $(TARGET)
 
+# ── Compile each TU into its own object file (enables make -j) ─────────────
+
 $(OBJ_DIR)/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@
+
+# ── Link ───────────────────────────────────────────────────────────────────
 
 $(TARGET): $(OBJ)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
+# ── Install / Uninstall ────────────────────────────────────────────────────
+
 install: release
 	install -Dm755 $(TARGET)             $(DESTDIR)$(PREFIX)/bin/beanwm
 	install -Dm644 config/config.default $(DESTDIR)$(SYSCONFDIR)/beanwm/config
+	install -Dm644 beanwm.desktop        $(DESTDIR)$(PREFIX)/share/xsessions/beanwm.desktop
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/beanwm
 	rm -f $(DESTDIR)$(SYSCONFDIR)/beanwm/config
+	rm -f $(DESTDIR)$(PREFIX)/share/xsessions/beanwm.desktop
 
+# ── Utility ────────────────────────────────────────────────────────────────
 
 clean:
 	rm -rf $(BUILD_DIR)
