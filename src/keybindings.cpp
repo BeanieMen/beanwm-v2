@@ -1,8 +1,6 @@
 #include "window_manager.h"
 #include "config.h"
 #include <X11/XKBlib.h>
-#include <cctype>
-#include <string>
 #include <cstdlib>
 #include <unistd.h>
 
@@ -15,70 +13,65 @@ static std::string trim(const std::string& value)
     return value.substr(start, end - start + 1);
 }
 
+static int parseWorkspaceNumber(const std::string& value)
+{
+    try {
+        return value.empty() ? 1 : std::stoi(value);
+    }
+    catch (...) {
+        return 1;
+    }
+}
+
+
 bool WindowManager::parseKeyBinding(
     const std::string &combo,
     const std::string &action_string,
     KeyBinding &binding)
 {
-    size_t last_plus = combo.rfind('+');
-    std::string modifier_part = last_plus == std::string::npos ? "" : combo.substr(0, last_plus);
-    std::string key_part = last_plus == std::string::npos ? combo : combo.substr(last_plus + 1);
-    KeySym key = parseKeyString(key_part);
-    if (key == NoSymbol)
-        return false;
-
-    binding.modifiers = modifier_part.empty() ? 0 : parseModString(modifier_part);
-    binding.key = key;
     binding.action = -1;
     binding.arg = 0;
     binding.cmd.clear();
 
-    if (action_string.rfind("exec", 0) == 0)
-    {
-            std::string command = trim(action_string.substr(4));
-        if (command == "terminal" || command == "term")
-            binding.action = ACTION_SPAWN_TERMINAL;
-        else
-        {
-            binding.action = ACTION_EXEC;
-            binding.cmd = command;
-        }
-    }
-    else if (action_string.rfind("workspace", 0) == 0)
-    {
-        std::string number = trim(action_string.substr(9));
-        try { binding.arg = number.empty() ? 1 : std::stoi(number); }
-        catch (...) { binding.arg = 1; }
-        binding.action = ACTION_SWITCH_WORKSPACE;
-    }
-    else if (action_string.rfind("move", 0) == 0)
-    {
-        std::string number = trim(action_string.substr(4));
-        try { binding.arg = number.empty() ? 1 : std::stoi(number); }
-        catch (...) { binding.arg = 1; }
-        binding.action = ACTION_MOVE_WORKSPACE;
-    }
-    else if (action_string.rfind("kill_focused", 0) == 0)
-    {
-        binding.action = ACTION_KILL;
-    }
-    else if (action_string.rfind("float", 0) == 0)
-    {
-        binding.action = ACTION_FLOAT;
-    }
+    size_t plus_pos = combo.rfind('+');
+    std::string mod_part = plus_pos == std::string::npos ? "" : combo.substr(0, plus_pos);
+    std::string key_part = plus_pos == std::string::npos ? combo : combo.substr(plus_pos + 1);
 
+    KeySym key = parseKeyString(key_part);
+    if (key == NoSymbol) return false;
+
+    binding.key = key;
+
+    binding.modifiers = mod_part.empty() ? 0 : parseModString(mod_part);
+    std::string action = trim(action_string);
+    if (action == "exec terminal" || action == "exec term")
+        binding.action = ACTION_SPAWN_TERMINAL;
+    else if (action.rfind("workspace", 0) == 0) {
+        binding.action = ACTION_SWITCH_WORKSPACE;
+        binding.arg = parseWorkspaceNumber(trim(action.substr(9)));
+    } else if (action.rfind("move", 0) == 0) {
+        binding.action = ACTION_MOVE_WORKSPACE;
+        binding.arg = parseWorkspaceNumber(trim(action.substr(4)));
+    } else if (action == "kill_focused")
+        binding.action = ACTION_KILL;
+    else if (action == "float")
+        binding.action = ACTION_FLOAT;
+    else if (action == "quit" || action == "exit")
+        binding.action = ACTION_QUIT;
+    else if (action.rfind("exec ", 0) == 0) {
+        binding.action = ACTION_EXEC;
+        binding.cmd = trim(action.substr(5));
+    }
     return binding.action != -1;
 }
 
 void WindowManager::setupKeybindings()
 {
     keybindings.clear();
-    for (auto &d : DEFAULT_BINDS)
-    {
-        std::string combo = d.combo;
-        std::string actionStr = d.action;
+    keybindings.reserve(sizeof(DEFAULT_BINDS) / sizeof(DEFAULT_BINDS[0]));
+    for (const auto &d : DEFAULT_BINDS) {
         KeyBinding binding{};
-        if (parseKeyBinding(combo, actionStr, binding))
+        if (parseKeyBinding(d.combo, d.action, binding))
             keybindings.push_back(binding);
     }
 }
@@ -87,75 +80,61 @@ void WindowManager::handleKeyPress()
 {
     KeySym k = XLookupKeysym(&event.xkey, 0);
     unsigned int m = event.xkey.state & CLEANMASK;
-    for (auto &b : keybindings)
-    {
-        if (b.key != k || b.modifiers != m)
-            continue;
-        if (b.action == ACTION_SPAWN_TERMINAL)
+
+    for (auto &b : keybindings) {
+        if (b.key != k || b.modifiers != m) continue;
+
+        if (b.action == ACTION_SPAWN_TERMINAL) {
             spawnTerminal();
-        else if (b.action == ACTION_SWITCH_WORKSPACE)
+        } else if (b.action == ACTION_SWITCH_WORKSPACE) {
             switchWorkspace(b.arg);
-        else if (b.action == ACTION_MOVE_WORKSPACE)
+        } else if (b.action == ACTION_MOVE_WORKSPACE) {
             moveToWorkspace(b.arg);
-        else if (b.action == ACTION_KILL)
-        {
-            Window focused = 0;
-            int revert = 0;
-            XGetInputFocus(display, &focused, &revert);
-            if (focused == None || focused == root)
-                return;
-            Client *c = findClient(focused); // only kill managed windows
-            if (!c)
-                return;
-            Atom wm_delete = XInternAtom(display, "WM_DELETE_WINDOW", False);
-            Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", False);
-            Atom *p = nullptr;
-            int n = 0;
-            bool has = false;
-            if (XGetWMProtocols(display, c->window, &p, &n))
-            {
-                for (int i = 0; i < n; ++i)
-                    if (p[i] == wm_delete)
-                        has = true;
-                XFree(p);
-            }
-            if (has)
-            {
-                XEvent ev{};
-                ev.type = ClientMessage;
-                ev.xclient.window = c->window;
-                ev.xclient.message_type = wm_protocols;
-                ev.xclient.format = 32;
-                ev.xclient.data.l[0] = wm_delete;
-                XSendEvent(display, c->window, False, NoEventMask, &ev);
-            }
-            else
-                XKillClient(display, c->window);
-            XSync(display, False);
-        }
-        else if (b.action == ACTION_QUIT)
-        {
-            if (display)
-                XCloseDisplay(display);
-            exit(0);
-        }
-        else if (b.action == ACTION_FLOAT)
-        {
+        } else if (b.action == ACTION_KILL) {
             Window focused = GetFocusedWindow();
-            switchTileWinToFloating(focused);
-        }
-        
-        else if (b.action == ACTION_EXEC)
-        {
-            if (fork() == 0)
-            {
+            Client *client = findClient(focused);
+            if (!client) return;
+            Atom delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
+            Atom protocols_atom = XInternAtom(display, "WM_PROTOCOLS", False);
+            Atom *protocols = nullptr;
+            int count = 0;
+            bool supports_delete = false;
+            if (XGetWMProtocols(display, client->window, &protocols, &count)) {
+                for (int i = 0; i < count; ++i)
+                    if (protocols[i] == delete_atom)
+                        supports_delete = true;
+                XFree(protocols);
+            }
+            if (supports_delete) {
+                XEvent close_event{};
+                close_event.type = ClientMessage;
+                close_event.xclient.window = client->window;
+                close_event.xclient.message_type = protocols_atom;
+                close_event.xclient.format = 32;
+                close_event.xclient.data.l[0] = delete_atom;
+                XSendEvent(display, client->window, False, NoEventMask, &close_event);
+            } else {
+                XKillClient(display, client->window);
+            }
+        } else if (b.action == ACTION_FLOAT) {
+            Window focused = GetFocusedWindow();
+            Client *client = findClient(focused);
+            if (client && client->mode == MODE_TILED) {
+                switchTileWinToFloating(client->window);
+            }
+        } else if (b.action == ACTION_QUIT) {
+            if (display) XCloseDisplay(display);
+            exit(0);
+        } else if (b.action == ACTION_EXEC && !b.cmd.empty()) {
+            if (fork() == 0) {
                 execlp(b.cmd.c_str(), b.cmd.c_str(), nullptr);
-                exit(1);
+                _exit(127);
             }
         }
         return;
     }
 }
+
 
 unsigned int WindowManager::parseModString(const std::string &s)
 {
@@ -205,5 +184,5 @@ KeySym WindowManager::parseKeyString(const std::string &s)
             character = static_cast<char>(tolower(static_cast<unsigned char>(character)));
         key = XStringToKeysym(text.c_str());
     }
-    return key == NoSymbol ? FALLBACK_KEYSYM : key;
+    return key;
 }

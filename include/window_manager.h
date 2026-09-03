@@ -65,6 +65,7 @@ private:
 
     void handleEvent();
     void handleMapRequest();
+    void handleConfigureRequest();
     void handleDestroyNotify();
     void handleKeyPress();
     void handleEnterNotify();
@@ -88,6 +89,8 @@ private:
     void hideWorkspace(int workspace);
 
     Client *findClient(Window window);
+    int getWindowNumber(Window window);
+    void updateClientNumbers();
 
     static int handleXError(
         Display *display,

@@ -18,6 +18,7 @@ struct Client
     int y;
     int width;
     int height;
+    int number;
 };
 
 struct Area
@@ -29,5 +30,3 @@ struct Area
     int width;
     int height;
 };
-
-void dwindleTile(Display *display, std::vector<Client> &clients, int gap, int workspace);

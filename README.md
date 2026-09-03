@@ -45,6 +45,9 @@ Keybindings are compiled from `include/config.h`:
 | `Mod + 1 .. 9` | Switch workspace |
 | `Mod + Shift + 1 .. 9` | Move focused window to workspace |
 | `Mod + Shift + q` | Quit WM |
+| `Mod + Shift + f` | Toggle focused window to floating |
+
+Hold `Mod` and drag with the left mouse button to move a floating window or swap a tiled window with the window under the pointer.
 
 `Mod` = `Mod4Mask` (Super) by default, changeable via `MODKEY` in `config.h`.
 
@@ -58,8 +61,9 @@ include/
   config.h           # untracked user copy (auto-created)
 src/
   main.cpp           # WindowManager wm; wm.run();
-  dwindle.cpp        # dwindleTile with uniform gap
-  window_manager.cpp # X11 events and window management
+  management.cpp     # dwindleTile with uniform gap
+  window_manager.cpp # X11 events, dragging, and window management
+  keybindings.cpp    # compiled keybinding parsing and actions
 build/beanwm         # binary (ASan+UBSan)
 ```
 

@@ -1,12 +1,12 @@
 #include "layout.h"
-#include "types.h"
 #include "config.h"
 #include <X11/Xlib.h>
 #include <vector>
 
 void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int workspace) {
-    int sw = DisplayWidth(display, 0);
-    int sh = DisplayHeight(display, 0);
+    int screen = DefaultScreen(display);
+    int sw = DisplayWidth(display, screen);
+    int sh = DisplayHeight(display, screen);
 
     std::vector<Client*> workspace_clients;
     workspace_clients.reserve(clients.size());
@@ -54,6 +54,5 @@ void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int wo
         a.client->height = a.height;
         XMoveResizeWindow(display, a.client->window, a.x, a.y, a.width, a.height);
     }
-        // Avoid synchronous layout updates
 }
 

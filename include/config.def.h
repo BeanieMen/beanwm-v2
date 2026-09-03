@@ -42,7 +42,6 @@ inline constexpr KeyEntry KEY_ENTRIES[] = {
 inline constexpr unsigned int CLEANMASK = ShiftMask | ControlMask | Mod1Mask | Mod4Mask;
 inline constexpr KeySym FALLBACK_KEYSYM = XK_q;
 
-// Default keybindings — config defines everything under input/
 struct DefaultBind { const char* combo; const char* action; };
 inline constexpr DefaultBind DEFAULT_BINDS[] = {
     {"Mod4+Return", "exec terminal"},
@@ -66,8 +65,3 @@ inline constexpr DefaultBind DEFAULT_BINDS[] = {
     {"Mod4+Shift+9", "move 9"},
     {"Mod4+Shift+q", "kill_focused"},
 };
-
-// Future tunables (uncomment to use):
-// inline constexpr unsigned int BORDER_PX = 1;
-// inline constexpr unsigned int SNAP = 32;
-// inline constexpr int SHOW_BAR = 1;
