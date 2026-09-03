@@ -1,2 +1,4 @@
 .opencode
 .vscode
+build
+include/config.h
