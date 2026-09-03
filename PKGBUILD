@@ -1,4 +1,4 @@
-# Maintainer: beanie <your@email.com>
+# Maintainer: beanie <jainarjav886@gmail.com>
 
 pkgname=beanwm
 pkgver=0.1.0
@@ -14,13 +14,25 @@ source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
-    cd "$pkgname-$pkgver"
+    if [ -d "$srcdir/$pkgname-$pkgver" ]; then
+        cd "$srcdir/$pkgname-$pkgver"
+    elif [ -d "$srcdir/beanwm-v2-$pkgver" ]; then
+        cd "$srcdir/beanwm-v2-$pkgver"
+    elif [ -f "$startdir/Makefile" ]; then
+        cd "$startdir"
+    fi
     make -j"$(nproc)"
 }
 
 package() {
-    cd "$pkgname-$pkgver"
+    if [ -d "$srcdir/$pkgname-$pkgver" ]; then
+        cd "$srcdir/$pkgname-$pkgver"
+    elif [ -d "$srcdir/beanwm-v2-$pkgver" ]; then
+        cd "$srcdir/beanwm-v2-$pkgver"
+    elif [ -f "$startdir/Makefile" ]; then
+        cd "$startdir"
+    fi
     make install DESTDIR="$pkgdir"
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    [ -f LICENSE ]   && install -Dm644 LICENSE   "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    [ -f README.md ] && install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }
