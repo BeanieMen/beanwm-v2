@@ -1,4 +1,5 @@
 #include "window_manager.h"
+#include "helpers/strut_helper.h"
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
@@ -54,7 +55,7 @@ void WindowManager::setup()
         fprintf(stderr, "Another WM is running on :%s\n", XDisplayString(display));
         exit(1);
     }
-    XSelectInput(display, root, EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
+    XSelectInput(display, root, EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | PropertyChangeMask);
 
     Window parent;
     Window *children = nullptr;
@@ -64,7 +65,7 @@ void WindowManager::setup()
         for (unsigned int i = 0; i < n; ++i)
         {
             XWindowAttributes attributes{};
-            if (!XGetWindowAttributes(display, children[i], &attributes) || attributes.override_redirect)
+            if (!XGetWindowAttributes(display, children[i], &attributes) || isDockWindow(display, children[i]))
                 continue;
             clientManager.addClient(children[i], MODE_TILED);
             XSelectInput(display, children[i], EnterWindowMask);
@@ -91,7 +92,7 @@ void WindowManager::setup()
 
 void WindowManager::tile()
 {
-    layoutManager.tile(display, clientManager);
+    layoutManager.tile(display, root, clientManager);
 }
 
 void WindowManager::switchWorkspace(int ws)
@@ -136,15 +137,21 @@ void WindowManager::handleEvent()
     case ButtonRelease:
         handleButtonRelease();
         break;
+    case PropertyNotify:
+        handlePropertyNotify();
+        break;
     }
 }
 
 void WindowManager::handleMapRequest()
 {
     Window w = event.xmaprequest.window;
-    XWindowAttributes attributes{};
-    if (XGetWindowAttributes(display, w, &attributes) && attributes.override_redirect)
+    if (isDockWindow(display, w))
+    {
+        XMapWindow(display, w);
+        tile();
         return;
+    }
     clientManager.addClient(w, MODE_TILED);
     XSelectInput(display, w, EnterWindowMask);
     XMapWindow(display, w);
@@ -325,6 +332,16 @@ void WindowManager::handleButtonRelease()
     dragTarget = None;
     dragIsFloating = false;
     XFlush(display);
+}
+
+void WindowManager::handlePropertyNotify()
+{
+    Atom a = event.xproperty.atom;
+    if (a == XInternAtom(display, "_NET_WM_STRUT_PARTIAL", False) ||
+        a == XInternAtom(display, "_NET_WM_STRUT", False))
+    {
+        tile();
+    }
 }
 
 int WindowManager::handleXError(Display *d, XErrorEvent *e)

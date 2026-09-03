@@ -3,10 +3,17 @@
 #include <X11/Xlib.h>
 #include <vector>
 
-void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int workspace) {
+void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int workspace, const ScreenStruts &struts) {
     int screen = DefaultScreen(display);
-    int sw = DisplayWidth(display, screen);
-    int sh = DisplayHeight(display, screen);
+    int screen_width = DisplayWidth(display, screen);
+    int screen_height = DisplayHeight(display, screen);
+
+    int start_x = struts.left + gap;
+    int start_y = struts.top + gap;
+    int sw = screen_width - struts.left - struts.right - 2 * gap;
+    int sh = screen_height - struts.top - struts.bottom - 2 * gap;
+    if (sw < 1) sw = 1;
+    if (sh < 1) sh = 1;
 
     std::vector<Client*> workspace_clients;
     workspace_clients.reserve(clients.size());
@@ -22,7 +29,7 @@ void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int wo
 
     std::vector<Area> areas;
     areas.reserve(workspace_clients.size());
-    areas.push_back({workspace_clients[0], workspace, gap, gap, sw - 2*gap, sh - 2*gap});
+    areas.push_back({workspace_clients[0], workspace, start_x, start_y, sw, sh});
     if (areas.back().width < 1) areas.back().width = 1;
     if (areas.back().height < 1) areas.back().height = 1;
 
@@ -55,4 +62,3 @@ void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int wo
         XMoveResizeWindow(display, a.client->window, a.x, a.y, a.width, a.height);
     }
 }
-

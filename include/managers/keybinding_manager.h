@@ -10,7 +10,6 @@ class WindowManager;
 
 enum KeyAction
 {
-    ACTION_SPAWN_TERMINAL = 0,
     ACTION_SWITCH_WORKSPACE = 1,
     ACTION_MOVE_WORKSPACE = 2,
     ACTION_KILL = 3,

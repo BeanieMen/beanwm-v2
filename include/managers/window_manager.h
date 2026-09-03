@@ -57,6 +57,7 @@ private:
     void handleButtonPress();
     void handleMotionNotify();
     void handleButtonRelease();
+    void handlePropertyNotify();
 
     static int handleXError(Display *display, XErrorEvent *error_event);
 };

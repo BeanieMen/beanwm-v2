@@ -16,11 +16,11 @@ SRC = src/main.cpp $(wildcard src/managers/*.cpp) $(wildcard src/helpers/*.cpp)
 
 .DEFAULT_GOAL := $(TARGET)
 
-include/helpers/config.h: include/helpers/config.def.h
+include/config.h: include/config.def.h
 	@echo "Creating $@ from $< — edit $@ to customize"
 	@cp $< $@
 
-$(TARGET): $(SRC) include/helpers/config.h
+$(TARGET): $(SRC) include/config.h
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS) $(LDLIBS)
 
@@ -34,5 +34,5 @@ test: $(TARGET)
 	DISPLAY=:2 ./$(TARGET)
 
 config:
-	cp include/helpers/config.def.h include/helpers/config.h
-	@echo "Reset configs from include/helpers/config.def.h"
+	cp include/config.def.h include/config.h
+	@echo "Reset configs from include/config.def.h"

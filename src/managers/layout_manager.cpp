@@ -1,11 +1,13 @@
 #include "layout_manager.h"
 #include "layout.h"
 
-void LayoutManager::tile(Display *display, ClientManager &clientManager)
+void LayoutManager::tile(Display *display, Window root, ClientManager &clientManager)
 {
     clientManager.updateClientNumbers();
     int current_workspace = clientManager.getCurrentWorkspace();
-    dwindleTile(display, clientManager.getTiledClients(), gap, current_workspace);
+    ScreenStruts struts = getScreenStruts(display, root);
+
+    dwindleTile(display, clientManager.getTiledClients(), gap, current_workspace, struts);
 
     for (auto &c : clientManager.getFloatingClients())
     {

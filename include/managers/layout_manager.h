@@ -2,6 +2,7 @@
 
 #include "client_manager.h"
 #include "config.h"
+#include "helpers/strut_helper.h"
 #include <X11/Xlib.h>
 
 class LayoutManager
@@ -16,5 +17,5 @@ public:
     int getGap() const { return gap; }
     void setGap(int g) { gap = g; }
 
-    void tile(Display *display, ClientManager &clientManager);
+    void tile(Display *display, Window root, ClientManager &clientManager);
 };

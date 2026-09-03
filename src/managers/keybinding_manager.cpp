@@ -43,9 +43,7 @@ bool KeybindingManager::parseKeyBinding(
     binding.modifiers = mod_part.empty() ? 0 : parseModString(mod_part);
     std::string action = trim(action_string);
 
-    if (action == "exec terminal" || action == "exec term")
-        binding.action = ACTION_SPAWN_TERMINAL;
-    else if (action.rfind("workspace", 0) == 0) {
+    if (action.rfind("workspace", 0) == 0) {
         binding.action = ACTION_SWITCH_WORKSPACE;
         binding.arg = parseWorkspaceNumber(trim(action.substr(9)));
     } else if (action.rfind("move", 0) == 0) {
@@ -60,6 +58,7 @@ bool KeybindingManager::parseKeyBinding(
     else if (action.rfind("exec ", 0) == 0) {
         binding.action = ACTION_EXEC;
         binding.cmd = trim(action.substr(5));
+        printf("Parsed exec command: %s\n", binding.cmd.c_str());
     }
     return binding.action != -1;
 }
@@ -98,9 +97,7 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
     for (auto &b : keybindings) {
         if (b.key != k || b.modifiers != m) continue;
 
-        if (b.action == ACTION_SPAWN_TERMINAL) {
-            wm.getProcessManager().spawnTerminal();
-        } else if (b.action == ACTION_SWITCH_WORKSPACE) {
+ if (b.action == ACTION_SWITCH_WORKSPACE) {
             wm.switchWorkspace(b.arg);
         } else if (b.action == ACTION_MOVE_WORKSPACE) {
             wm.moveToWorkspace(b.arg);
@@ -139,6 +136,7 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
             if (display) XCloseDisplay(display);
             exit(0);
         } else if (b.action == ACTION_EXEC && !b.cmd.empty()) {
+            printf("Executing command: %s\n", b.cmd.c_str());
             wm.getProcessManager().spawnProcess(b.cmd);
         }
         return;
