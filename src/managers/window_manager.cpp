@@ -56,7 +56,7 @@ void WindowManager::setup()
 
     XSelectInput(display, root,
         EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask |
-        KeyPressMask | PropertyChangeMask);
+        KeyPressMask | PropertyChangeMask | ExposureMask);
 
     Window parent;
     Window *children = nullptr;
@@ -80,6 +80,11 @@ void WindowManager::setup()
     keybindingManager.setupKeybindings();
     keybindingManager.grabKeys(display, root);
 
+    for (const auto &cmd : ConfigManager::instance().get().autostart)
+    {
+        processManager.spawnProcess(cmd);
+    }
+
     unsigned int modKey = ConfigManager::instance().get().modKey;
     XUngrabButton(display, AnyButton, AnyModifier, root);
     auto grabBtn = [&](unsigned int mod)
@@ -99,7 +104,9 @@ void WindowManager::setup()
 
 void WindowManager::tile()
 {
+    XClearWindow(display, root);
     layoutManager.tile(display, root, clientManager);
+    XFlush(display);
 }
 
 void WindowManager::switchWorkspace(int ws)
@@ -125,6 +132,7 @@ void WindowManager::handleEvent()
     case MotionNotify:     handleMotionNotify();     break;
     case ButtonRelease:    handleButtonRelease();    break;
     case PropertyNotify:   handlePropertyNotify();   break;
+    case Expose:           handleExpose();           break;
     }
 }
 
@@ -170,7 +178,14 @@ void WindowManager::handleConfigureRequest()
 void WindowManager::handleDestroyNotify()
 {
     if (clientManager.removeClient(event.xdestroywindow.window))
+    {
         tile();
+        Window top = clientManager.getTopClientWindow();
+        if (top != None)
+            XSetInputFocus(display, top, RevertToPointerRoot, CurrentTime);
+        else
+            XSetInputFocus(display, root, RevertToPointerRoot, CurrentTime);
+    }
 }
 
 void WindowManager::handleKeyPress()
@@ -219,6 +234,7 @@ void WindowManager::handleMotionNotify()
         c->x = dragWindowX + event.xmotion.x_root - dragStartX;
         c->y = dragWindowY + event.xmotion.y_root - dragStartY;
         XMoveWindow(display, c->window, c->x, c->y);
+        XClearWindow(display, root);
         XFlush(display);
         return;
     }
@@ -280,6 +296,15 @@ void WindowManager::handlePropertyNotify()
     if (a == XInternAtom(display, "_NET_WM_STRUT_PARTIAL", False) ||
         a == XInternAtom(display, "_NET_WM_STRUT", False))
         tile();
+}
+
+void WindowManager::handleExpose()
+{
+    if (event.xexpose.count == 0)
+    {
+        XClearWindow(display, root);
+        XFlush(display);
+    }
 }
 
 int WindowManager::handleXError(Display *d, XErrorEvent *e)

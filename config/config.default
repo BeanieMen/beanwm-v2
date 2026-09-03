@@ -32,3 +32,10 @@ Mod4+Shift+6      = move 6
 Mod4+Shift+7      = move 7
 Mod4+Shift+8      = move 8
 Mod4+Shift+9      = move 9
+
+[autostart]
+# Commands to execute automatically when BeanWM starts
+# Example:
+# exec feh --bg-fill ~/.config/wallpaper.jpg
+# exec picom -b
+

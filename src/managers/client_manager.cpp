@@ -123,3 +123,12 @@ void ClientManager::updateClientGeometry(Display *display, Client &c)
         c.height = a.height;
     }
 }
+
+Window ClientManager::getTopClientWindow() const
+{
+    for (const auto &c : tiledClients)
+        if (c.workspace == current_workspace) return c.window;
+    for (const auto &c : floatingClients)
+        if (c.workspace == current_workspace) return c.window;
+    return None;
+}

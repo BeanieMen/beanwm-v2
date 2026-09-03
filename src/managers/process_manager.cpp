@@ -1,6 +1,8 @@
 #include "process_manager.h"
 #include "config_manager.h"
 #include <cstdio>
+#include <cstdlib>
+#include <sys/wait.h>
 #include <unistd.h>
 
 void ProcessManager::spawnTerminal()
@@ -11,10 +13,20 @@ void ProcessManager::spawnTerminal()
 void ProcessManager::spawnProcess(const std::string &command)
 {
     if (command.empty()) return;
-    if (fork() == 0)
+    pid_t pid = fork();
+    if (pid == 0)
     {
-        execlp(command.c_str(), command.c_str(), nullptr);
-        perror(command.c_str());
-        _exit(127);
+        if (fork() == 0)
+        {
+            setsid();
+            execlp("/bin/sh", "sh", "-c", command.c_str(), nullptr);
+            perror(command.c_str());
+            _exit(127);
+        }
+        _exit(0);
+    }
+    if (pid > 0)
+    {
+        waitpid(pid, nullptr, 0);
     }
 }

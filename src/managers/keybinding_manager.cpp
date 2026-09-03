@@ -150,7 +150,7 @@ KeySym KeybindingManager::parseKeyString(const std::string &s)
 {
     std::string text = trim(s);
     for (const auto &entry : KEY_ENTRIES)
-        if (text == entry.name) return entry.keysym;
+        if (toLower(text) == toLower(entry.name)) return entry.keysym;
 
     if (text.size() == 1)
     {

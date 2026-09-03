@@ -15,6 +15,9 @@ struct Config
 
     // Keybindings: { "Mod4+Return", "exec terminal" }
     std::vector<std::pair<std::string, std::string>> binds;
+
+    // Autostart commands
+    std::vector<std::string> autostart;
 };
 
 class ConfigManager

@@ -2,3 +2,8 @@
 .vscode
 build
 include/config.h
+*.tar.gz
+*.zst
+src/beanwm*
+pkg/
+build/

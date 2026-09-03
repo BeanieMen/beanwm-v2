@@ -42,4 +42,5 @@ public:
     void switchTileWinToFloating(Display *display, Window window,
                                  std::function<void()> onTileChanged);
     void updateClientGeometry(Display *display, Client &client);
+    Window getTopClientWindow() const;
 };

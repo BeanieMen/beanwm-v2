@@ -66,7 +66,7 @@ void ConfigManager::load()
     }
     fprintf(stderr, "[beanwm] Loading config: %s\n", path.c_str());
     parseFile(path);
-    config_.cleanMask = ShiftMask | ControlMask | Mod1Mask | config_.modKey;
+    config_.cleanMask = ~(LockMask | Mod2Mask);
 }
 
 void ConfigManager::parseFile(const std::string &path)
@@ -93,6 +93,23 @@ void ConfigManager::parseFile(const std::string &path)
         if (line.front() == '[' && line.back() == ']')
         {
             section = line.substr(1, line.size() - 2);
+            continue;
+        }
+
+        if (section == "autostart")
+        {
+            std::string cmd = line;
+            if (cmd.rfind("exec ", 0) == 0)
+                cmd = trim(cmd.substr(5));
+            else if (cmd.rfind("exec=", 0) == 0)
+                cmd = trim(cmd.substr(5));
+            else {
+                size_t eq = cmd.find('=');
+                if (eq != std::string::npos && trim(cmd.substr(0, eq)) == "exec")
+                    cmd = trim(cmd.substr(eq + 1));
+            }
+            if (!cmd.empty())
+                config_.autostart.push_back(cmd);
             continue;
         }
 
