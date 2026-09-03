@@ -1,6 +1,6 @@
 # BeanWM default configuration
 # Installed to /etc/beanwm/config — copy to $XDG_CONFIG_HOME/beanwm/config to customise.
-# Changes take effect on WM restart; no recompile needed.
+# Changes take effect after hot reload; no restart needed.
 
 [general]
 terminal   = alacritty
@@ -13,7 +13,7 @@ Mod4+Return       = exec terminal
 Mod4+Shift+Space  = exec rofi -show run
 Mod4+Shift+q      = kill_focused
 Mod4+Shift+f      = float
-Mod4+Shift+r      = rebuild_reload
+Mod4+Shift+r      = reload_config
 Mod4+Shift+Escape = quit
 Mod4+1            = workspace 1
 Mod4+2            = workspace 2

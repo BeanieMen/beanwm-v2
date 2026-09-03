@@ -39,8 +39,8 @@ bool KeybindingManager::parseKeyBinding(const std::string &combo,
         binding.action = ACTION_FLOAT;
     else if (action == "quit" || action == "exit")
         binding.action = ACTION_QUIT;
-    else if (action == "rebuild_reload" || action == "rebuild" || action == "reload" || action == "restart")
-        binding.action = ACTION_REBUILD_RELOAD;
+    else if (action == "reload_config" || action == "reload")
+        binding.action = ACTION_RELOAD_CONFIG;
     else if (action.rfind("exec ", 0) == 0) {
         binding.action = ACTION_EXEC;
         binding.cmd    = trim(action.substr(5));
@@ -120,10 +120,9 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
                 wm.tile();
             });
         } else if (b.action == ACTION_QUIT) {
-            XCloseDisplay(display);
-            exit(0);
-        } else if (b.action == ACTION_REBUILD_RELOAD) {
-            wm.rebuildAndReload();
+            wm.quit();
+        } else if (b.action == ACTION_RELOAD_CONFIG) {
+            wm.reloadConfig();
         } else if (b.action == ACTION_EXEC && !b.cmd.empty()) {
             std::string cmd = b.cmd;
             if (cmd == "terminal")

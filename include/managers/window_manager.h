@@ -43,9 +43,10 @@ public:
     void tile();
     void switchWorkspace(int workspace);
     void moveToWorkspace(int workspace);
+    void quit();
 
     Window GetFocusedWindow();
-    void rebuildAndReload();
+    void reloadConfig();
 
 private:
     void setup();

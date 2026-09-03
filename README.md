@@ -33,7 +33,7 @@ make config           # reset to defaults
 | `MODKEY` | `Mod4Mask` | Super (or `Mod1Mask` for Alt) |
 | `TERMINAL` | `"alacritty"` | Spawned on Mod+Return |
 
-Changes take effect after rebuilding the window manager.
+Changes take effect after hot reloading the configuration.
 
 ## Keybindings
 
@@ -70,4 +70,4 @@ build/beanwm         # binary (ASan+UBSan)
 ## Notes
 
 - Vector-based ownership — no `malloc`/`free`, uniform gaps, ASan clean.
-- Configuration is compile-time only; rebuild after changing `include/config.h`.
+- Configuration is loaded at runtime; use the `reload_config` binding after changing it.

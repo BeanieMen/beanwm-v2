@@ -147,73 +147,36 @@ bool WindowManager::restoreState()
     return true;
 }
 
-void WindowManager::rebuildAndReload()
+void WindowManager::quit()
 {
-    fprintf(stderr, "[beanwm] Rebuild & reload requested...\n");
-
-    std::string sourceDir;
-    std::string cwd = std::filesystem::current_path().string();
-
-    if (std::filesystem::exists(cwd + "/Makefile")) {
-        sourceDir = cwd;
-    } else if (std::filesystem::exists("/home/beanie/beanwm-v2/Makefile")) {
-        sourceDir = "/home/beanie/beanwm-v2";
-    } else {
-        char selfBuf[1024] = {0};
-        ssize_t len = readlink("/proc/self/exe", selfBuf, sizeof(selfBuf) - 1);
-        if (len > 0) {
-            std::filesystem::path p(selfBuf);
-            if (p.parent_path().filename() == "build") {
-                sourceDir = p.parent_path().parent_path().string();
-            } else {
-                sourceDir = p.parent_path().string();
-            }
-        }
-    }
-
-    if (sourceDir.empty() || !std::filesystem::exists(sourceDir + "/Makefile")) {
-        fprintf(stderr, "[beanwm] Error: Cannot locate Makefile for rebuilding\n");
-        return;
-    }
-
-    std::string buildCmd = "make -C \"" + sourceDir + "\" release";
-    int ret = system(buildCmd.c_str());
-    if (ret != 0) {
-        fprintf(stderr, "[beanwm] Rebuild failed (code %d). Reload aborted.\n", ret);
-        return;
-    }
-
-    fprintf(stderr, "[beanwm] Rebuild successful! Preserving state & reloading...\n");
-
-    saveState();
-
-    std::string targetBin = sourceDir + "/build/beanwm";
-    if (!std::filesystem::exists(targetBin)) {
-        targetBin = "/usr/bin/beanwm";
-    }
-
-    pid_t child = fork();
-    if (child < 0)
-    {
-        fprintf(stderr, "[beanwm] Error: fork failed; reload aborted\n");
-        return;
-    }
-
-    if (child == 0)
-    {
-        close(ConnectionNumber(display));
-        display = nullptr;
-
-        char *args[] = { const_cast<char*>(targetBin.c_str()), nullptr };
-        execv(targetBin.c_str(), args);
-
-        fprintf(stderr, "[beanwm] Error: execv failed for %s\n", targetBin.c_str());
-        _exit(127);
-    }
-
+    processManager.terminateAll();
     XCloseDisplay(display);
     display = nullptr;
-    _exit(0);
+    std::exit(0);
+}
+
+void WindowManager::reloadConfig()
+{
+    ConfigManager::instance().load();
+    keybindingManager.setupKeybindings();
+    keybindingManager.grabKeys(display, root);
+
+    unsigned int modKey = ConfigManager::instance().get().modKey;
+    XUngrabButton(display, AnyButton, AnyModifier, root);
+    XGrabButton(display, Button1, modKey, root, False, ButtonPressMask,
+                GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, Button1, modKey | LockMask, root, False, ButtonPressMask,
+                GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, Button1, modKey | Mod2Mask, root, False, ButtonPressMask,
+                GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(display, Button1, modKey | LockMask | Mod2Mask, root, False,
+                ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+
+    int workspaceCount = ConfigManager::instance().get().workspaceCount;
+    if (clientManager.getCurrentWorkspace() > workspaceCount)
+        clientManager.setCurrentWorkspace(1);
+    tile();
+    fprintf(stderr, "[beanwm] Configuration reloaded\n");
 }
 
 void WindowManager::setup()
