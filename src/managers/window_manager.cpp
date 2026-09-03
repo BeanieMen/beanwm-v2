@@ -192,10 +192,28 @@ void WindowManager::rebuildAndReload()
         targetBin = "/usr/bin/beanwm";
     }
 
-    char *args[] = { const_cast<char*>(targetBin.c_str()), nullptr };
-    execv(targetBin.c_str(), args);
+    pid_t child = fork();
+    if (child < 0)
+    {
+        fprintf(stderr, "[beanwm] Error: fork failed; reload aborted\n");
+        return;
+    }
 
-    fprintf(stderr, "[beanwm] Error: execv failed for %s\n", targetBin.c_str());
+    if (child == 0)
+    {
+        close(ConnectionNumber(display));
+        display = nullptr;
+
+        char *args[] = { const_cast<char*>(targetBin.c_str()), nullptr };
+        execv(targetBin.c_str(), args);
+
+        fprintf(stderr, "[beanwm] Error: execv failed for %s\n", targetBin.c_str());
+        _exit(127);
+    }
+
+    XCloseDisplay(display);
+    display = nullptr;
+    _exit(0);
 }
 
 void WindowManager::setup()
