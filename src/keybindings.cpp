@@ -62,6 +62,10 @@ bool WindowManager::parseKeyBinding(
     {
         binding.action = ACTION_KILL;
     }
+    else if (action_string.rfind("float", 0) == 0)
+    {
+        binding.action = ACTION_FLOAT;
+    }
 
     return binding.action != -1;
 }
@@ -135,6 +139,12 @@ void WindowManager::handleKeyPress()
                 XCloseDisplay(display);
             exit(0);
         }
+        else if (b.action == ACTION_FLOAT)
+        {
+            Window focused = GetFocusedWindow();
+            switchTileWinToFloating(focused);
+        }
+        
         else if (b.action == ACTION_EXEC)
         {
             if (fork() == 0)

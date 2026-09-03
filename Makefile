@@ -15,7 +15,7 @@ BUILD_DIR = build
 SRC = src/main.cpp \
       src/window_manager.cpp \
       src/keybindings.cpp \
-      src/dwindle.cpp
+      src/management.cpp
 
 .DEFAULT_GOAL := $(TARGET)
 

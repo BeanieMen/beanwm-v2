@@ -50,3 +50,4 @@ void dwindleTile(Display* display, const std::vector<Client>& clients, int gap, 
     }
     XSync(display, False);
 }
+

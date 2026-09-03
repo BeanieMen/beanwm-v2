@@ -15,14 +15,17 @@ private:
     static constexpr int WORKSPACE_COUNT = ::WORKSPACE_COUNT;
     static constexpr int DEFAULT_GAP = ::GAP;
     static constexpr unsigned int DEFAULT_MODKEY = ::MODKEY;
+    int current_workspace;
 
-    enum {
+    enum
+    {
         ACTION_SPAWN_TERMINAL = 0,
         ACTION_SWITCH_WORKSPACE = 1,
         ACTION_MOVE_WORKSPACE = 2,
         ACTION_KILL = 3,
         ACTION_QUIT = 4,
-        ACTION_EXEC = 5
+        ACTION_EXEC = 5,
+        ACTION_FLOAT = 6
     };
 
     struct KeyBinding
@@ -38,9 +41,8 @@ private:
     Window root;
     XEvent event;
 
-    std::vector<Client> clients;
-
-    int current_workspace;
+    std::vector<Client> tiledClients;
+    std::vector<Client> floatingClients;
     std::vector<KeyBinding> keybindings;
 
 public:
@@ -51,7 +53,7 @@ public:
 private:
     void setup();
     void setupKeybindings();
-    bool parseKeyBinding(const std::string& combo, const std::string& action_string, KeyBinding& binding);
+    bool parseKeyBinding(const std::string &combo, const std::string &action_string, KeyBinding &binding);
     unsigned int parseModString(const std::string &str);
     KeySym parseKeyString(const std::string &str);
 
@@ -63,12 +65,13 @@ private:
     void handleEnterNotify();
 
     void spawnTerminal();
-    void spawnProcess(const std::string& command);
+    void spawnProcess(const std::string &command);
 
-    void addClient(Window window);
+    void addClient(Window window, ManagementMode mode);
     bool removeClient(Window window);
 
     void tile();
+    void switchTileWinToFloating(Window &window);
 
     void switchWorkspace(int workspace);
     void moveToWorkspace(int workspace);
@@ -79,6 +82,6 @@ private:
 
     static int handleXError(
         Display *display,
-        XErrorEvent *error_event
-    );
+        XErrorEvent *error_event);
+    Window GetFocusedWindow();
 };

@@ -3,15 +3,18 @@
 #include <X11/Xlib.h>
 #include <vector>
 
-typedef struct Client Client;
+enum ManagementMode
+{
+    MODE_TILED = 0,
+    MODE_FLOATING = 1
+};
 
 struct Client
 {
     Window window;
     int workspace;
+    ManagementMode mode;
 };
-
-typedef struct Area Area;
 
 struct Area
 {
