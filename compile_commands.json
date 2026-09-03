@@ -1,6 +1,0 @@
-[
-  {"directory":"/home/beanie/beanwm-v2","arguments":["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-g","-O0","-Iinclude","-c","src/main.cpp","-o","build/main.o"],"file":"src/main.cpp"},
-  {"directory":"/home/beanie/beanwm-v2","arguments":["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-g","-O0","-Iinclude","-c","src/window_manager.cpp","-o","build/window_manager.o"],"file":"src/window_manager.cpp"},
-  {"directory":"/home/beanie/beanwm-v2","arguments":["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-g","-O0","-Iinclude","-c","src/keybindings.cpp","-o","build/keybindings.o"],"file":"src/keybindings.cpp"},
-  {"directory":"/home/beanie/beanwm-v2","arguments":["g++","-Wall","-Wextra","-Wpedantic","-std=c++23","-g","-O0","-Iinclude","-c","src/management.cpp","-o","build/management.o"],"file":"src/management.cpp"}
-]

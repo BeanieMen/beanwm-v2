@@ -1,38 +1,71 @@
-CXX = g++
+CXX      = g++
+PREFIX   ?= /usr
+SYSCONFDIR ?= /etc
 
-CXXFLAGS = -Wall -Wextra -Wpedantic -std=c++23 -g -O0 \
-           -fsanitize=address,undefined \
-           -fno-omit-frame-pointer
-
+# Include paths
 CPPFLAGS = -Iinclude -Iinclude/managers -Iinclude/helpers
 
-LDFLAGS = -fsanitize=address,undefined
-LDLIBS = -lX11
+# Flags shared between profiles
+CXXFLAGS_COMMON = -Wall -Wextra -Wpedantic -std=c++23
 
-TARGET = build/beanwm
+# Release profile: optimised, no sanitizers
+CXXFLAGS_RELEASE = $(CXXFLAGS_COMMON) -O2 -DNDEBUG
+LDFLAGS_RELEASE  =
+
+# Debug profile: sanitizers, no optimisation
+CXXFLAGS_DEBUG = $(CXXFLAGS_COMMON) -O0 -g \
+                 -fsanitize=address,undefined \
+                 -fno-omit-frame-pointer
+LDFLAGS_DEBUG  = -fsanitize=address,undefined
+
+LDLIBS  = -lX11
+
+TARGET    = build/beanwm
 BUILD_DIR = build
+OBJ_DIR   = build/obj
 
-SRC = src/main.cpp $(wildcard src/managers/*.cpp) $(wildcard src/helpers/*.cpp)
+SRC = src/main.cpp \
+      $(wildcard src/managers/*.cpp) \
+      $(wildcard src/helpers/*.cpp)
 
-.DEFAULT_GOAL := $(TARGET)
+# Map src/**/*.cpp → build/obj/**/*o preserving subdirectory structure
+OBJ = $(patsubst src/%.cpp,$(OBJ_DIR)/%.o,$(SRC))
 
-include/config.h: include/config.def.h
-	@echo "Creating $@ from $< — edit $@ to customize"
-	@cp $< $@
 
-$(TARGET): $(SRC) include/config.h
-	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS) $(LDLIBS)
+.DEFAULT_GOAL := release
 
-run: $(TARGET)
-	./$(TARGET)
+release: CXXFLAGS := $(CXXFLAGS_RELEASE)
+release: LDFLAGS  := $(LDFLAGS_RELEASE)
+release: $(TARGET)
+
+debug: CXXFLAGS := $(CXXFLAGS_DEBUG)
+debug: LDFLAGS  := $(LDFLAGS_DEBUG)
+debug: $(TARGET)
+
+$(OBJ_DIR)/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@
+
+$(TARGET): $(OBJ)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+install: release
+	install -Dm755 $(TARGET)             $(DESTDIR)$(PREFIX)/bin/beanwm
+	install -Dm644 config/config.default $(DESTDIR)$(SYSCONFDIR)/beanwm/config
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/beanwm
+	rm -f $(DESTDIR)$(SYSCONFDIR)/beanwm/config
+
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-test: $(TARGET)
+run: release
+	./$(TARGET)
+
+test: release
 	DISPLAY=:2 ./$(TARGET)
 
-config:
-	cp include/config.def.h include/config.h
-	@echo "Reset configs from include/config.def.h"
+.PHONY: release debug install uninstall clean run test

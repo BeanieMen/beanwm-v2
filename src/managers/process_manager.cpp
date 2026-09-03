@@ -1,36 +1,20 @@
 #include "process_manager.h"
-#include "config.h"
+#include "config_manager.h"
 #include <cstdio>
-#include <cstdlib>
 #include <unistd.h>
-#include <vector>
-#include <sstream>
 
 void ProcessManager::spawnTerminal()
 {
-    spawnProcess(TERMINAL);
+    spawnProcess(ConfigManager::instance().get().terminal);
 }
 
 void ProcessManager::spawnProcess(const std::string &command)
 {
+    if (command.empty()) return;
     if (fork() == 0)
     {
-        std::istringstream stream(command);
-        std::vector<std::string> args;
-        std::string arg;
-
-        while (stream >> arg)
-            args.push_back(arg);
-
-        std::vector<char *> argv;
-        for (auto &a : args)
-            argv.push_back(a.data());
-
-        argv.push_back(nullptr);
-
-        execvp(argv[0], argv.data());
-
-        perror(argv[0]);
+        execlp(command.c_str(), command.c_str(), nullptr);
+        perror(command.c_str());
         _exit(127);
     }
 }

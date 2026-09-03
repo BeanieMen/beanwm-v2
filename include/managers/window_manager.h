@@ -1,11 +1,11 @@
 #pragma once
 
 #include "types.h"
-#include "config.h"
 #include "client_manager.h"
 #include "layout_manager.h"
 #include "keybinding_manager.h"
 #include "process_manager.h"
+#include "config_manager.h"
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -14,31 +14,31 @@ class WindowManager
 {
 private:
     Display *display;
-    Window root;
-    XEvent event;
+    Window   root;
+    XEvent   event;
 
-    ClientManager clientManager;
-    LayoutManager layoutManager;
+    ClientManager     clientManager;
+    LayoutManager     layoutManager;
     KeybindingManager keybindingManager;
-    ProcessManager processManager;
+    ProcessManager    processManager;
 
-    Window draggedWindow = None;
-    Window dragTarget = None;
-    int dragStartX = 0;
-    int dragStartY = 0;
-    int dragWindowX = 0;
-    int dragWindowY = 0;
-    bool dragIsFloating = false;
+    Window draggedWindow  = None;
+    Window dragTarget     = None;
+    int    dragStartX     = 0;
+    int    dragStartY     = 0;
+    int    dragWindowX    = 0;
+    int    dragWindowY    = 0;
+    bool   dragIsFloating = false;
 
 public:
     WindowManager();
     ~WindowManager();
     void run();
 
-    ClientManager &getClientManager() { return clientManager; }
-    LayoutManager &getLayoutManager() { return layoutManager; }
-    KeybindingManager &getKeybindingManager() { return keybindingManager; }
-    ProcessManager &getProcessManager() { return processManager; }
+    ClientManager     &getClientManager()     { return clientManager; }
+    LayoutManager     &getLayoutManager()     { return layoutManager; }
+    KeybindingManager &getKeybindingManager()  { return keybindingManager; }
+    ProcessManager    &getProcessManager()    { return processManager; }
 
     void tile();
     void switchWorkspace(int workspace);

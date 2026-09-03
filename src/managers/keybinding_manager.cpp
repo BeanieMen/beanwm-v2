@@ -1,35 +1,18 @@
 #include "keybinding_manager.h"
 #include "window_manager.h"
+#include "config_manager.h"
+#include "helpers/string_helper.h"
 #include <X11/XKBlib.h>
 #include <cstdlib>
+#include <cstdio>
 #include <unistd.h>
 
-static std::string trim(const std::string &value)
-{
-    size_t start = value.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos)
-        return "";
-    size_t end = value.find_last_not_of(" \t\r\n");
-    return value.substr(start, end - start + 1);
-}
-
-static int parseWorkspaceNumber(const std::string &value)
-{
-    try {
-        return value.empty() ? 1 : std::stoi(value);
-    }
-    catch (...) {
-        return 1;
-    }
-}
-
-bool KeybindingManager::parseKeyBinding(
-    const std::string &combo,
-    const std::string &action_string,
-    KeyBinding &binding)
+bool KeybindingManager::parseKeyBinding(const std::string &combo,
+                                         const std::string &action_string,
+                                         KeyBinding &binding)
 {
     binding.action = -1;
-    binding.arg = 0;
+    binding.arg    = 0;
     binding.cmd.clear();
 
     size_t plus_pos = combo.rfind('+');
@@ -39,16 +22,17 @@ bool KeybindingManager::parseKeyBinding(
     KeySym key = parseKeyString(key_part);
     if (key == NoSymbol) return false;
 
-    binding.key = key;
+    binding.key       = key;
     binding.modifiers = mod_part.empty() ? 0 : parseModString(mod_part);
+
     std::string action = trim(action_string);
 
     if (action.rfind("workspace", 0) == 0) {
         binding.action = ACTION_SWITCH_WORKSPACE;
-        binding.arg = parseWorkspaceNumber(trim(action.substr(9)));
+        binding.arg    = parseWorkspaceNumber(action.substr(9));
     } else if (action.rfind("move", 0) == 0) {
         binding.action = ACTION_MOVE_WORKSPACE;
-        binding.arg = parseWorkspaceNumber(trim(action.substr(4)));
+        binding.arg    = parseWorkspaceNumber(action.substr(4));
     } else if (action == "kill_focused")
         binding.action = ACTION_KILL;
     else if (action == "float")
@@ -57,19 +41,21 @@ bool KeybindingManager::parseKeyBinding(
         binding.action = ACTION_QUIT;
     else if (action.rfind("exec ", 0) == 0) {
         binding.action = ACTION_EXEC;
-        binding.cmd = trim(action.substr(5));
-        printf("Parsed exec command: %s\n", binding.cmd.c_str());
+        binding.cmd    = trim(action.substr(5));
     }
+
     return binding.action != -1;
 }
 
 void KeybindingManager::setupKeybindings()
 {
+    const auto &binds = ConfigManager::instance().get().binds;
     keybindings.clear();
-    keybindings.reserve(sizeof(DEFAULT_BINDS) / sizeof(DEFAULT_BINDS[0]));
-    for (const auto &d : DEFAULT_BINDS) {
+    keybindings.reserve(binds.size());
+    for (const auto &[combo, action] : binds)
+    {
         KeyBinding binding{};
-        if (parseKeyBinding(d.combo, d.action, binding))
+        if (parseKeyBinding(combo, action, binding))
             keybindings.push_back(binding);
     }
 }
@@ -80,8 +66,7 @@ void KeybindingManager::grabKeys(Display *display, Window root)
     for (auto &b : keybindings)
     {
         KeyCode c = XKeysymToKeycode(display, b.key);
-        if (!c)
-            continue;
+        if (!c) continue;
         XGrabKey(display, c, b.modifiers, root, False, GrabModeAsync, GrabModeAsync);
         XGrabKey(display, c, b.modifiers | LockMask, root, False, GrabModeAsync, GrabModeAsync);
         XGrabKey(display, c, b.modifiers | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
@@ -91,13 +76,14 @@ void KeybindingManager::grabKeys(Display *display, Window root)
 
 void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowManager &wm)
 {
-    KeySym k = XLookupKeysym(&event.xkey, 0);
-    unsigned int m = event.xkey.state & CLEANMASK;
+    KeySym k        = XLookupKeysym(&event.xkey, 0);
+    unsigned int m  = event.xkey.state & ConfigManager::instance().get().cleanMask;
 
-    for (auto &b : keybindings) {
+    for (auto &b : keybindings)
+    {
         if (b.key != k || b.modifiers != m) continue;
 
- if (b.action == ACTION_SWITCH_WORKSPACE) {
+        if (b.action == ACTION_SWITCH_WORKSPACE) {
             wm.switchWorkspace(b.arg);
         } else if (b.action == ACTION_MOVE_WORKSPACE) {
             wm.moveToWorkspace(b.arg);
@@ -105,25 +91,24 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
             Window focused = wm.GetFocusedWindow();
             Client *client = wm.getClientManager().findClient(focused);
             if (!client) return;
-            Atom delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
-            Atom protocols_atom = XInternAtom(display, "WM_PROTOCOLS", False);
+            Atom del   = XInternAtom(display, "WM_DELETE_WINDOW", False);
+            Atom proto = XInternAtom(display, "WM_PROTOCOLS", False);
             Atom *protocols = nullptr;
             int count = 0;
             bool supports_delete = false;
             if (XGetWMProtocols(display, client->window, &protocols, &count)) {
                 for (int i = 0; i < count; ++i)
-                    if (protocols[i] == delete_atom)
-                        supports_delete = true;
+                    if (protocols[i] == del) supports_delete = true;
                 XFree(protocols);
             }
             if (supports_delete) {
-                XEvent close_event{};
-                close_event.type = ClientMessage;
-                close_event.xclient.window = client->window;
-                close_event.xclient.message_type = protocols_atom;
-                close_event.xclient.format = 32;
-                close_event.xclient.data.l[0] = delete_atom;
-                XSendEvent(display, client->window, False, NoEventMask, &close_event);
+                XEvent e{};
+                e.type                 = ClientMessage;
+                e.xclient.window       = client->window;
+                e.xclient.message_type = proto;
+                e.xclient.format       = 32;
+                e.xclient.data.l[0]    = del;
+                XSendEvent(display, client->window, False, NoEventMask, &e);
             } else {
                 XKillClient(display, client->window);
             }
@@ -133,11 +118,13 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
                 wm.tile();
             });
         } else if (b.action == ACTION_QUIT) {
-            if (display) XCloseDisplay(display);
+            XCloseDisplay(display);
             exit(0);
         } else if (b.action == ACTION_EXEC && !b.cmd.empty()) {
-            printf("Executing command: %s\n", b.cmd.c_str());
-            wm.getProcessManager().spawnProcess(b.cmd);
+            std::string cmd = b.cmd;
+            if (cmd == "terminal")
+                cmd = ConfigManager::instance().get().terminal;
+            wm.getProcessManager().spawnProcess(cmd);
         }
         return;
     }
@@ -149,19 +136,12 @@ unsigned int KeybindingManager::parseModString(const std::string &s)
     size_t start = 0;
     while (true)
     {
-        size_t position = s.find('+', start);
-        std::string token = trim(position == std::string::npos ? s.substr(start) : s.substr(start, position - start));
-        for (auto &entry : MOD_ENTRIES)
-        {
-            if (token == entry.name)
-            {
-                modifiers |= entry.mask;
-                break;
-            }
-        }
-        if (position == std::string::npos)
-            break;
-        start = position + 1;
+        size_t pos   = s.find('+', start);
+        std::string token = trim(pos == std::string::npos ? s.substr(start) : s.substr(start, pos - start));
+        for (const auto &entry : MOD_ENTRIES)
+            if (token == entry.name) { modifiers |= entry.mask; break; }
+        if (pos == std::string::npos) break;
+        start = pos + 1;
     }
     return modifiers;
 }
@@ -169,27 +149,21 @@ unsigned int KeybindingManager::parseModString(const std::string &s)
 KeySym KeybindingManager::parseKeyString(const std::string &s)
 {
     std::string text = trim(s);
-    for (auto &entry : KEY_ENTRIES)
-    {
-        if (text == entry.name)
-            return entry.keysym;
-    }
+    for (const auto &entry : KEY_ENTRIES)
+        if (text == entry.name) return entry.keysym;
+
     if (text.size() == 1)
     {
-        char character = text[0];
-        if (character >= '0' && character <= '9')
-            return XK_0 + (character - '0');
-        if (character >= 'a' && character <= 'z')
-            return XK_a + (character - 'a');
-        if (character >= 'A' && character <= 'Z')
-            return XK_A + (character - 'A');
+        char c = text[0];
+        if (c >= '0' && c <= '9') return XK_0 + (c - '0');
+        if (c >= 'a' && c <= 'z') return XK_a + (c - 'a');
+        if (c >= 'A' && c <= 'Z') return XK_A + (c - 'A');
     }
+
     KeySym key = XStringToKeysym(text.c_str());
     if (key == NoSymbol)
     {
-        for (char &character : text)
-            character = static_cast<char>(tolower(static_cast<unsigned char>(character)));
-        key = XStringToKeysym(text.c_str());
+        key = XStringToKeysym(toLower(text).c_str());
     }
     return key;
 }
