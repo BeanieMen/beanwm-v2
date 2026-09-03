@@ -13,9 +13,8 @@ TARGET = build/beanwm
 BUILD_DIR = build
 
 SRC = src/main.cpp \
-      src/core/window_manager.cpp \
-      src/config/config.cpp \
-      src/input/keybindings.cpp \
+      src/window_manager.cpp \
+      src/keybindings.cpp \
       src/dwindle.cpp
 
 .DEFAULT_GOAL := $(TARGET)

@@ -20,8 +20,9 @@ private:
         ACTION_SPAWN_TERMINAL = 0,
         ACTION_SWITCH_WORKSPACE = 1,
         ACTION_MOVE_WORKSPACE = 2,
-        ACTION_QUIT = 3,
-        ACTION_EXEC = 4
+        ACTION_KILL = 3,
+        ACTION_QUIT = 4,
+        ACTION_EXEC = 5
     };
 
     struct KeyBinding
@@ -40,14 +41,7 @@ private:
     std::vector<Client> clients;
 
     int current_workspace;
-    unsigned int MOD_MASK = MODKEY;
     std::vector<KeyBinding> keybindings;
-
-    // Runtime editable config (i3-like) — loaded from ./config, overrides compiled defaults
-    int gap = GAP;
-    int runtime_workspace_count = WORKSPACE_COUNT;
-    std::string runtime_terminal = TERMINAL;
-    bool has_runtime_keybinds = false;
 
 public:
     WindowManager();
@@ -57,7 +51,6 @@ public:
 private:
     void setup();
     void setupKeybindings();
-    void loadRuntimeConfig();
     bool parseKeyBinding(const std::string& combo, const std::string& action_string, KeyBinding& binding);
     unsigned int parseModString(const std::string &str);
     KeySym parseKeyString(const std::string &str);
@@ -70,6 +63,7 @@ private:
     void handleEnterNotify();
 
     void spawnTerminal();
+    void spawnProcess(const std::string& command);
 
     void addClient(Window window);
     bool removeClient(Window window);

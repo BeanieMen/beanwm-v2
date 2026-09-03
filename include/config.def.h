@@ -64,7 +64,7 @@ inline constexpr DefaultBind DEFAULT_BINDS[] = {
     {"Mod4+Shift+7", "move 7"},
     {"Mod4+Shift+8", "move 8"},
     {"Mod4+Shift+9", "move 9"},
-    {"Mod4+Shift+q", "quit"},
+    {"Mod4+Shift+q", "kill_focused"},
 };
 
 // Future tunables (uncomment to use):

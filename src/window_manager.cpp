@@ -30,17 +30,26 @@ void WindowManager::run() {
 
 void WindowManager::setup() {
     current_workspace = 1;
-    loadRuntimeConfig();
     XSelectInput(display, root, EnterWindowMask | SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask);
+    Window parent;
+    Window *children = nullptr;
+    unsigned int child_count = 0;
+    if (XQueryTree(display, root, &root, &parent, &children, &child_count)) {
+        for (unsigned int i = 0; i < child_count; ++i) {
+            addClient(children[i]);
+            XSelectInput(display, children[i], EnterWindowMask);
+        }
+        if (children) XFree(children);
+    }
     setupKeybindings();
     XUngrabKey(display, AnyKey, AnyModifier, root);
     for (auto &b : keybindings) {
         KeyCode code = XKeysymToKeycode(display, b.key);
         if (code) {
-            XGrabKey(display, code, b.modifiers, root, True, GrabModeAsync, GrabModeAsync);
-            XGrabKey(display, code, b.modifiers | LockMask, root, True, GrabModeAsync, GrabModeAsync);
-            XGrabKey(display, code, b.modifiers | Mod2Mask, root, True, GrabModeAsync, GrabModeAsync);
-            XGrabKey(display, code, b.modifiers | LockMask | Mod2Mask, root, True, GrabModeAsync, GrabModeAsync);
+            XGrabKey(display, code, b.modifiers, root, False, GrabModeAsync, GrabModeAsync);
+            XGrabKey(display, code, b.modifiers | LockMask, root, False, GrabModeAsync, GrabModeAsync);
+            XGrabKey(display, code, b.modifiers | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
+            XGrabKey(display, code, b.modifiers | LockMask | Mod2Mask, root, False, GrabModeAsync, GrabModeAsync);
         }
     }
     XSync(display, False);
@@ -104,18 +113,26 @@ void WindowManager::handleEnterNotify() {
 
 void WindowManager::spawnTerminal() {
     if (fork() == 0) {
-        execlp(runtime_terminal.c_str(), runtime_terminal.c_str(), nullptr);
-        fprintf(stderr, "Failed to exec %s\n", runtime_terminal.c_str());
+        execlp(TERMINAL, TERMINAL, nullptr);
+        fprintf(stderr, "Failed to exec %s\n", TERMINAL);
+        exit(1);
+    }
+}
+
+void WindowManager::spawnProcess(const std::string& command) {
+    if (fork() == 0) {
+        execlp(command.c_str(), command.c_str(), nullptr);
+        fprintf(stderr, "Failed to exec %s\n", command.c_str());
         exit(1);
     }
 }
 
 void WindowManager::tile() {
-    dwindleTile(display, clients, gap, current_workspace);
+    dwindleTile(display, clients, GAP, current_workspace);
 }
 
 void WindowManager::switchWorkspace(int workspace) {
-    if (workspace < 1 || workspace > runtime_workspace_count || workspace == current_workspace) return;
+    if (workspace < 1 || workspace > WORKSPACE_COUNT || workspace == current_workspace) return;
     hideWorkspace(current_workspace);
     current_workspace = workspace;
     showWorkspace(current_workspace);
@@ -123,7 +140,7 @@ void WindowManager::switchWorkspace(int workspace) {
 }
 
 void WindowManager::moveToWorkspace(int workspace) {
-    if (workspace < 1 || workspace > runtime_workspace_count) return;
+    if (workspace < 1 || workspace > WORKSPACE_COUNT) return;
     Window focused = 0;
     int revert = 0;
     XGetInputFocus(display, &focused, &revert);
