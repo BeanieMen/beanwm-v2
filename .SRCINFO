@@ -1,0 +1,14 @@
+pkgbase = beanwm
+	pkgdesc = A minimal dwindle-tiling X11 window manager written in C++23
+	pkgver = 0.1.6
+	pkgrel = 1
+	url = https://github.com/beaniemen/beanwm-v2
+	arch = x86_64
+	license = MIT
+	makedepends = gcc
+	depends = libx11
+	backup = etc/beanwm/config
+	source = beanwm-0.1.6.tar.gz::https://github.com/beaniemen/beanwm-v2/archive/v0.1.6.tar.gz
+	sha256sums = 3c6761eca054d88cc04da0abebb02aba3f5a593f7d6e1571f981d982f964257d
+
+pkgname = beanwm

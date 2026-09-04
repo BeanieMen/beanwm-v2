@@ -11,28 +11,23 @@ depends=('libx11')
 makedepends=('gcc')
 backup=('etc/beanwm/config')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('4de6999a23f4883fac74548b33f1d2813eb045cd2e4e283a0f54d3e4bed0f067')
+sha256sums=('3c6761eca054d88cc04da0abebb02aba3f5a593f7d6e1571f981d982f964257d')
 
 build() {
-    if [ -d "$srcdir/$pkgname-$pkgver" ]; then
-        cd "$srcdir/$pkgname-$pkgver"
-    elif [ -d "$srcdir/beanwm-v2-$pkgver" ]; then
-        cd "$srcdir/beanwm-v2-$pkgver"
-    elif [ -f "$startdir/Makefile" ]; then
-        cd "$startdir"
-    fi
+    cd "$srcdir/beanwm-v2-$pkgver"
     make -j"$(nproc)"
 }
 
 package() {
-    if [ -d "$srcdir/$pkgname-$pkgver" ]; then
-        cd "$srcdir/$pkgname-$pkgver"
-    elif [ -d "$srcdir/beanwm-v2-$pkgver" ]; then
-        cd "$srcdir/beanwm-v2-$pkgver"
-    elif [ -f "$startdir/Makefile" ]; then
-        cd "$startdir"
-    fi
+    cd "$srcdir/beanwm-v2-$pkgver"
+
     make install DESTDIR="$pkgdir"
-    [ -f LICENSE ]   && install -Dm644 LICENSE   "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    [ -f README.md ] && install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+    install -Dm644 LICENSE \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    if [ -f README.md ]; then
+        install -Dm644 README.md \
+            "$pkgdir/usr/share/doc/$pkgname/README.md"
+    fi
 }
