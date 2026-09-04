@@ -1,7 +1,7 @@
 # Maintainer: beanie <jainarjav886@gmail.com>
 
 pkgname=beanwm
-pkgver=0.1.5
+pkgver=0.1.6
 pkgrel=1
 pkgdesc="A minimal dwindle-tiling X11 window manager written in C++23"
 arch=('x86_64')
@@ -11,7 +11,7 @@ depends=('libx11')
 makedepends=('gcc')
 backup=('etc/beanwm/config')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('5a0a7f7e3caeba379ef4c6a829126a23adc076a038e77b14920f6a8803608185')
+sha256sums=('4de6999a23f4883fac74548b33f1d2813eb045cd2e4e283a0f54d3e4bed0f067')
 
 build() {
     if [ -d "$srcdir/$pkgname-$pkgver" ]; then
