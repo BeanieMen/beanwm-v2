@@ -1,6 +1,5 @@
 #include "helpers/strut_helper.h"
 #include <X11/Xatom.h>
-#include <algorithm>
 
 bool isDockWindow(Display *display, Window window)
 {

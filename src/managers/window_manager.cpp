@@ -4,13 +4,11 @@
 #include "helpers/string_helper.h"
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <unistd.h>
 #include <utility>
 #include <fstream>
-#include <sstream>
-#include <filesystem>
 #include <cctype>
-#include <algorithm>
 #include <X11/extensions/Xinerama.h>
 
 // ── Error handling ─────────────────────────────────────────────────────────
@@ -30,6 +28,52 @@ static std::string getStateFilePath(Display *display)
     for (char &c : disp)
         if (!isalnum(static_cast<unsigned char>(c))) c = '_';
     return "/tmp/.beanwm_state_" + disp;
+}
+
+// ── Button grab helper (plain loop over modifier combos, no lambda) ─────────
+
+static void grabModButtons(Display *display, Window root, unsigned int modKey)
+{
+    unsigned int mods[4] = {modKey, modKey | LockMask, modKey | Mod2Mask, modKey | LockMask | Mod2Mask};
+    XUngrabButton(display, AnyButton, AnyModifier, root);
+    for (int i = 0; i < 4; ++i)
+        XGrabButton(display, Button1, mods[i], root, False, ButtonPressMask,
+                    GrabModeAsync, GrabModeAsync, None, None);
+}
+
+// ── Manual state-line parsing (plain find/substr/stoi only) ───────────────────
+
+static bool parseIntField(const std::string &tok, int &out)
+{
+    if (tok.empty()) return false;
+    try { out = std::stoi(tok); }
+    catch (...) { return false; }
+    return true;
+}
+
+static bool parseWindowField(const std::string &tok, Window &out)
+{
+    if (tok.empty()) return false;
+    try { out = static_cast<Window>(std::stoul(tok)); }
+    catch (...) { return false; }
+    return true;
+}
+
+// Split line into tokens on spaces/tabs (plain loop)
+static int splitFields(const std::string &line, std::string *toks, int maxToks)
+{
+    int n = 0;
+    size_t i = 0;
+    while (i < line.size() && n < maxToks)
+    {
+        while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) ++i;
+        if (i >= line.size()) break;
+        size_t j = i;
+        while (j < line.size() && line[j] != ' ' && line[j] != '\t') ++j;
+        toks[n++] = line.substr(i, j - i);
+        i = j;
+    }
+    return n;
 }
 
 // ── Constructor / Destructor ───────────────────────────────────────────────
@@ -106,10 +150,8 @@ void WindowManager::detectScreens()
 
     currentScreenIndex = 0;
 
-    // Ensure every detected screen has a default workspace entry
-    for (const auto &s : screens)
-        if (clientManager.getCurrentWorkspace(s.screenIndex) < 1)
-            clientManager.setCurrentWorkspace(s.screenIndex, 1);
+    // Single global workspace shared by all screens (screens keep geometry/focus role only)
+    clientManager.setCurrentWorkspace(1);
 }
 
 // ── Screen helpers ────────────────────────────────────────────────────────
@@ -158,9 +200,8 @@ void WindowManager::saveState()
         return;
     }
 
-    // Save per-screen active workspaces
-    for (const auto &s : screens)
-        out << "SCREEN_WS " << s.screenIndex << " " << clientManager.getCurrentWorkspace(s.screenIndex) << "\n";
+    // Single global workspace shared by all screens
+    out << "GLOBAL_WS " << clientManager.getCurrentWorkspace() << "\n";
 
     for (const auto &c : clientManager.getTiledClients())
         out << "TILED " << c.window << " " << c.screenIndex << " " << c.workspace << "\n";
@@ -176,7 +217,9 @@ void WindowManager::saveState()
 bool WindowManager::restoreState()
 {
     std::string path = getStateFilePath(display);
-    if (!std::filesystem::exists(path)) return false;
+    std::ifstream probe(path);
+    if (!probe.is_open()) return false;
+    probe.close();
 
     std::ifstream in(path);
     if (!in.is_open()) return false;
@@ -189,21 +232,29 @@ bool WindowManager::restoreState()
         line = trim(line);
         if (line.empty()) continue;
 
-        std::stringstream ss(line);
-        std::string type;
-        ss >> type;
+        std::string toks[8];
+        int n = splitFields(line, toks, 8);
+        if (n == 0) continue;
 
-        if (type == "SCREEN_WS")
+        if (toks[0] == "GLOBAL_WS")
         {
-            int screenIdx = 0, ws = 1;
-            if (ss >> screenIdx >> ws)
-                clientManager.setCurrentWorkspace(screenIdx, ws);
+            int ws = 1;
+            if (n >= 2 && parseIntField(toks[1], ws))
+                clientManager.setCurrentWorkspace(ws);
         }
-        else if (type == "TILED")
+        else if (toks[0] == "SCREEN_WS")
+        {
+            // Legacy per-screen state: adopt the value as the single global workspace
+            int ws = 1;
+            if (n >= 3 && parseIntField(toks[2], ws))
+                clientManager.setCurrentWorkspace(ws);
+        }
+        else if (toks[0] == "TILED")
         {
             Window w = 0;
             int screenIdx = 0, ws = 1;
-            if (ss >> w >> screenIdx >> ws)
+            if (n >= 4 && parseWindowField(toks[1], w) &&
+                parseIntField(toks[2], screenIdx) && parseIntField(toks[3], ws))
             {
                 XWindowAttributes a{};
                 if (XGetWindowAttributes(display, w, &a))
@@ -214,11 +265,14 @@ bool WindowManager::restoreState()
                 }
             }
         }
-        else if (type == "FLOATING")
+        else if (toks[0] == "FLOATING")
         {
             Window w = 0;
             int screenIdx = 0, ws = 1, x = 0, y = 0, width = 800, height = 600;
-            if (ss >> w >> screenIdx >> ws >> x >> y >> width >> height)
+            if (n >= 8 && parseWindowField(toks[1], w) && parseIntField(toks[2], screenIdx) &&
+                parseIntField(toks[3], ws) && parseIntField(toks[4], x) &&
+                parseIntField(toks[5], y) && parseIntField(toks[6], width) &&
+                parseIntField(toks[7], height))
             {
                 XWindowAttributes a{};
                 if (XGetWindowAttributes(display, w, &a))
@@ -232,7 +286,7 @@ bool WindowManager::restoreState()
     }
 
     in.close();
-    std::filesystem::remove(path);
+    ::remove(path.c_str());
     return true;
 }
 
@@ -243,11 +297,14 @@ void WindowManager::rebuildAndReload()
     fprintf(stderr, "[beanwm] Rebuild & reload requested...\n");
 
     std::string sourceDir;
-    std::string cwd = std::filesystem::current_path().string();
+    char cwdBuf[4096] = {0};
+    std::string cwd;
+    if (::getcwd(cwdBuf, sizeof(cwdBuf)))
+        cwd = cwdBuf;
 
-    if (std::filesystem::exists(cwd + "/Makefile"))
+    if (!cwd.empty() && ::access((cwd + "/Makefile").c_str(), F_OK) == 0)
         sourceDir = cwd;
-    else if (std::filesystem::exists("/home/beanie/beanwm-v2/Makefile"))
+    else if (::access("/home/beanie/beanwm-v2/Makefile", F_OK) == 0)
         sourceDir = "/home/beanie/beanwm-v2";
     else
     {
@@ -255,14 +312,20 @@ void WindowManager::rebuildAndReload()
         ssize_t len = readlink("/proc/self/exe", selfBuf, sizeof(selfBuf) - 1);
         if (len > 0)
         {
-            std::filesystem::path p(selfBuf);
-            sourceDir = (p.parent_path().filename() == "build")
-                ? p.parent_path().parent_path().string()
-                : p.parent_path().string();
+            selfBuf[len] = '\0';
+            std::string exe(selfBuf);
+            size_t slash = exe.find_last_of('/');
+            std::string parent = (slash == std::string::npos) ? "" : exe.substr(0, slash);
+            size_t base = parent.find_last_of('/');
+            std::string baseName = (base == std::string::npos) ? parent : parent.substr(base + 1);
+            if (baseName == "build")
+                sourceDir = (base == std::string::npos) ? "" : parent.substr(0, base);
+            else
+                sourceDir = parent;
         }
     }
 
-    if (sourceDir.empty() || !std::filesystem::exists(sourceDir + "/Makefile"))
+    if (sourceDir.empty() || ::access((sourceDir + "/Makefile").c_str(), F_OK) != 0)
     {
         fprintf(stderr, "[beanwm] Error: Cannot locate Makefile\n");
         return;
@@ -280,7 +343,7 @@ void WindowManager::rebuildAndReload()
     saveState();
 
     std::string targetBin = sourceDir + "/build/beanwm";
-    if (!std::filesystem::exists(targetBin))
+    if (::access(targetBin.c_str(), F_OK) != 0)
         targetBin = "/usr/bin/beanwm";
 
     char *args[] = { const_cast<char*>(targetBin.c_str()), nullptr };
@@ -307,15 +370,7 @@ void WindowManager::reloadConfig()
     keybindingManager.grabKeys(display, root);
 
     unsigned int modKey = ConfigManager::instance().get().modKey;
-    XUngrabButton(display, AnyButton, AnyModifier, root);
-    XGrabButton(display, Button1, modKey, root, False, ButtonPressMask,
-                GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(display, Button1, modKey | LockMask, root, False, ButtonPressMask,
-                GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(display, Button1, modKey | Mod2Mask, root, False, ButtonPressMask,
-                GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(display, Button1, modKey | LockMask | Mod2Mask, root, False,
-                ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    grabModButtons(display, root, modKey);
     tile();
     fprintf(stderr, "[beanwm] Configuration reloaded\n");
 }
@@ -326,9 +381,8 @@ void WindowManager::setup()
 {
     ConfigManager::instance().load();
 
-    // Initialise workspace 1 for every screen
-    for (const auto &s : screens)
-        clientManager.setCurrentWorkspace(s.screenIndex, 1);
+    // Single global workspace shared by all screens
+    clientManager.setCurrentWorkspace(1);
 
     XSetErrorHandler(detectError);
     XSelectInput(display, root, SubstructureRedirectMask | SubstructureNotifyMask);
@@ -373,18 +427,15 @@ void WindowManager::setup()
         if (children) XFree(children);
     }
 
-    // Show/hide workspaces per screen
+    // Show the single global workspace on all screens, hide the rest
+    int curWs = clientManager.getCurrentWorkspace();
     int wsCount = ConfigManager::instance().get().workspaceCount;
-    for (const auto &s : screens)
+    for (int ws = 1; ws <= wsCount; ++ws)
     {
-        int curWs = clientManager.getCurrentWorkspace(s.screenIndex);
-        for (int ws = 1; ws <= wsCount; ++ws)
-        {
-            if (ws == curWs)
-                clientManager.showWorkspace(display, s.screenIndex, ws);
-            else
-                clientManager.hideWorkspace(display, s.screenIndex, ws);
-        }
+        if (ws == curWs)
+            clientManager.showWorkspace(display, ws);
+        else
+            clientManager.hideWorkspace(display, ws);
     }
 
     XSetInputFocus(display, root, RevertToPointerRoot, CurrentTime);
@@ -398,19 +449,7 @@ void WindowManager::setup()
             processManager.spawnProcess(cmd);
 
     unsigned int modKey = ConfigManager::instance().get().modKey;
-    XUngrabButton(display, AnyButton, AnyModifier, root);
-    auto grabBtn = [&](unsigned int mod)
-    {
-        XGrabButton(display, Button1, mod, root, False, ButtonPressMask,
-                    GrabModeAsync, GrabModeAsync, None, None);
-        XGrabButton(display, Button1, mod | LockMask, root, False, ButtonPressMask,
-                    GrabModeAsync, GrabModeAsync, None, None);
-        XGrabButton(display, Button1, mod | Mod2Mask, root, False, ButtonPressMask,
-                    GrabModeAsync, GrabModeAsync, None, None);
-        XGrabButton(display, Button1, mod | LockMask | Mod2Mask, root, False,
-                    ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
-    };
-    grabBtn(modKey);
+    grabModButtons(display, root, modKey);
     XSync(display, False);
 }
 
@@ -423,16 +462,18 @@ void WindowManager::tile()
     XFlush(display);
 }
 
-// ── Workspace switching (on the active screen) ────────────────────────────
+// ── Workspace switching (global: flips ALL screens atomically) ─────────────
 
 void WindowManager::switchWorkspace(int ws)
 {
-    clientManager.switchWorkspace(display, currentScreenIndex, ws, [this]() { tile(); });
+    clientManager.switchWorkspace(display, ws);
+    tile();
 }
 
 void WindowManager::moveToWorkspace(int ws)
 {
-    clientManager.moveToWorkspace(display, root, currentScreenIndex, ws, [this]() { tile(); });
+    clientManager.moveToWorkspace(display, root, ws);
+    tile();
 }
 
 // ── Event dispatch ────────────────────────────────────────────────────────
@@ -512,13 +553,11 @@ void WindowManager::handleConfigureRequest()
 void WindowManager::handleDestroyNotify()
 {
     Window w = event.xdestroywindow.window;
-    const Client *dead = clientManager.findClient(w);
-    int si = dead ? dead->screenIndex : currentScreenIndex;
 
     if (clientManager.removeClient(w))
     {
         tile();
-        Window top = clientManager.getTopClientWindow(si);
+        Window top = clientManager.getTopClientWindow();
         if (top != None)
             XSetInputFocus(display, top, RevertToPointerRoot, CurrentTime);
         else
@@ -604,8 +643,10 @@ void WindowManager::handleMotionNotify()
             double scaleW = static_cast<double>(newScreen.width)  / oldScreen.width;
             double scaleH = static_cast<double>(newScreen.height) / oldScreen.height;
 
-            int newW = std::max(1, static_cast<int>(dragWindowW * scaleW));
-            int newH = std::max(1, static_cast<int>(dragWindowH * scaleH));
+            int newW = static_cast<int>(dragWindowW * scaleW);
+            int newH = static_cast<int>(dragWindowH * scaleH);
+            if (newW < 1) newW = 1;
+            if (newH < 1) newH = 1;
 
             // Reposition within new screen bounds
             int relX = c->x - oldScreen.x;
@@ -627,8 +668,9 @@ void WindowManager::handleMotionNotify()
         return;
     }
 
-    // Tiled drag: swap windows on same screen only
-    int ws = clientManager.getCurrentWorkspace(c->screenIndex);
+    // Tiled drag: swap windows on the same screen on the single global workspace.
+    // Floating cross-screen drag above preserves the global ws (only screenIndex/geometry change).
+    int ws = clientManager.getCurrentWorkspace();
     auto &tiled = clientManager.getTiledClients();
 
     Client *hover = nullptr;

@@ -1,10 +1,11 @@
 #include "client_manager.h"
 #include "config_manager.h"
+#include <X11/Xlib.h>
 
 void ClientManager::addClient(Window w, int screenIndex, ManagementMode mode)
 {
     if (findClient(w)) return;
-    int ws = getCurrentWorkspace(screenIndex);
+    int ws = getCurrentWorkspace();
     if (mode == MODE_TILED)
         tiledClients.push_back(Client{w, screenIndex, ws, MODE_TILED, 0, 0, 800, 600, 0});
     else
@@ -24,20 +25,20 @@ void ClientManager::addClient(Window w, int screenIndex, int workspace, Manageme
 
 bool ClientManager::removeClient(Window w)
 {
-    for (auto it = tiledClients.begin(); it != tiledClients.end(); ++it)
+    for (size_t i = 0; i < tiledClients.size(); ++i)
     {
-        if (it->window == w)
+        if (tiledClients[i].window == w)
         {
-            tiledClients.erase(it);
+            tiledClients.erase(tiledClients.begin() + (long)i);
             updateClientNumbers();
             return true;
         }
     }
-    for (auto it = floatingClients.begin(); it != floatingClients.end(); ++it)
+    for (size_t i = 0; i < floatingClients.size(); ++i)
     {
-        if (it->window == w)
+        if (floatingClients[i].window == w)
         {
-            floatingClients.erase(it);
+            floatingClients.erase(floatingClients.begin() + (long)i);
             updateClientNumbers();
             return true;
         }
@@ -47,26 +48,31 @@ bool ClientManager::removeClient(Window w)
 
 Client *ClientManager::findClient(Window w)
 {
-    for (auto &c : tiledClients)    if (c.window == w) return &c;
-    for (auto &c : floatingClients) if (c.window == w) return &c;
+    for (size_t i = 0; i < tiledClients.size(); ++i)
+        if (tiledClients[i].window == w) return &tiledClients[i];
+    for (size_t i = 0; i < floatingClients.size(); ++i)
+        if (floatingClients[i].window == w) return &floatingClients[i];
     return nullptr;
 }
 
 void ClientManager::updateClientNumbers()
 {
-    // Per-screen, per-workspace numbering
-    std::map<std::pair<int,int>, int> counters;
-    for (auto &c : tiledClients)
+    // Single global counter: numbers unique across tiled + floating on the visible ws
+    int globalWs = getCurrentWorkspace();
+    int n = 0;
+    for (size_t i = 0; i < tiledClients.size(); ++i)
     {
-        int ws  = getCurrentWorkspace(c.screenIndex);
-        auto key = std::make_pair(c.screenIndex, c.workspace);
-        c.number = (c.workspace == ws) ? ++counters[key] : 0;
+        if (tiledClients[i].workspace == globalWs)
+            tiledClients[i].number = ++n;
+        else
+            tiledClients[i].number = 0;
     }
-    for (auto &c : floatingClients)
+    for (size_t i = 0; i < floatingClients.size(); ++i)
     {
-        int ws  = getCurrentWorkspace(c.screenIndex);
-        auto key = std::make_pair(c.screenIndex, c.workspace);
-        c.number = (c.workspace == ws) ? ++counters[key] : 0;
+        if (floatingClients[i].workspace == globalWs)
+            floatingClients[i].number = ++n;
+        else
+            floatingClients[i].number = 0;
     }
 }
 
@@ -76,19 +82,17 @@ int ClientManager::getWindowNumber(Window w)
     return c ? c->number : 0;
 }
 
-void ClientManager::switchWorkspace(Display *display, int screenIndex, int ws,
-                                     std::function<void()> onWorkspaceChanged)
+void ClientManager::switchWorkspace(Display *display, int ws)
 {
     int count = ConfigManager::instance().get().workspaceCount;
-    if (ws < 1 || ws > count || ws == getCurrentWorkspace(screenIndex)) return;
-    hideWorkspace(display, screenIndex, getCurrentWorkspace(screenIndex));
-    setCurrentWorkspace(screenIndex, ws);
-    showWorkspace(display, screenIndex, ws);
-    if (onWorkspaceChanged) onWorkspaceChanged();
+    int cur = getCurrentWorkspace();
+    if (ws < 1 || ws > count || ws == cur) return;
+    hideWorkspace(display, cur);
+    setCurrentWorkspace(ws);
+    showWorkspace(display, ws);
 }
 
-void ClientManager::moveToWorkspace(Display *display, Window root, int screenIndex, int ws,
-                                     std::function<void()> onWorkspaceChanged)
+void ClientManager::moveToWorkspace(Display *display, Window root, int ws)
 {
     int count = ConfigManager::instance().get().workspaceCount;
     if (ws < 1 || ws > count) return;
@@ -98,38 +102,36 @@ void ClientManager::moveToWorkspace(Display *display, Window root, int screenInd
     if (f == None || f == root) return;
     Client *c = findClient(f);
     if (!c) return;
-    int oldWs  = c->workspace;
-    int curWs  = getCurrentWorkspace(screenIndex);
+    int oldWs = c->workspace;
+    int curWs = getCurrentWorkspace();
     c->workspace = ws;
     if (oldWs != curWs && ws == curWs)
         XMapWindow(display, c->window);
     else if (oldWs == curWs && ws != curWs)
         XUnmapWindow(display, c->window);
-    if (onWorkspaceChanged) onWorkspaceChanged();
 }
 
-void ClientManager::showWorkspace(Display *display, int screenIndex, int ws)
+void ClientManager::showWorkspace(Display *display, int ws)
 {
-    for (auto &c : tiledClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws)
-            XMapWindow(display, c.window);
-    for (auto &c : floatingClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws)
-            XMapWindow(display, c.window);
+    for (size_t i = 0; i < tiledClients.size(); ++i)
+        if (tiledClients[i].workspace == ws)
+            XMapWindow(display, tiledClients[i].window);
+    for (size_t i = 0; i < floatingClients.size(); ++i)
+        if (floatingClients[i].workspace == ws)
+            XMapWindow(display, floatingClients[i].window);
 }
 
-void ClientManager::hideWorkspace(Display *display, int screenIndex, int ws)
+void ClientManager::hideWorkspace(Display *display, int ws)
 {
-    for (auto &c : tiledClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws)
-            XUnmapWindow(display, c.window);
-    for (auto &c : floatingClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws)
-            XUnmapWindow(display, c.window);
+    for (size_t i = 0; i < tiledClients.size(); ++i)
+        if (tiledClients[i].workspace == ws)
+            XUnmapWindow(display, tiledClients[i].window);
+    for (size_t i = 0; i < floatingClients.size(); ++i)
+        if (floatingClients[i].workspace == ws)
+            XUnmapWindow(display, floatingClients[i].window);
 }
 
-void ClientManager::switchTileWinToFloating(Display *display, Window w,
-                                             std::function<void()> onTileChanged)
+void ClientManager::switchTileWinToFloating(Display *display, Window w)
 {
     Client *c = findClient(w);
     if (!c || c->mode != MODE_TILED) return;
@@ -138,7 +140,6 @@ void ClientManager::switchTileWinToFloating(Display *display, Window w,
     removeClient(w);
     saved.mode = MODE_FLOATING;
     floatingClients.push_back(saved);
-    if (onTileChanged) onTileChanged();
 }
 
 void ClientManager::updateClientGeometry(Display *display, Client &c)
@@ -153,12 +154,12 @@ void ClientManager::updateClientGeometry(Display *display, Client &c)
     }
 }
 
-Window ClientManager::getTopClientWindow(int screenIndex) const
+Window ClientManager::getTopClientWindow() const
 {
-    int ws = getCurrentWorkspace(screenIndex);
-    for (const auto &c : tiledClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws) return c.window;
-    for (const auto &c : floatingClients)
-        if (c.screenIndex == screenIndex && c.workspace == ws) return c.window;
+    int ws = getCurrentWorkspace();
+    for (size_t i = 0; i < tiledClients.size(); ++i)
+        if (tiledClients[i].workspace == ws) return tiledClients[i].window;
+    for (size_t i = 0; i < floatingClients.size(); ++i)
+        if (floatingClients[i].workspace == ws) return floatingClients[i].window;
     return None;
 }

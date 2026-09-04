@@ -2,6 +2,11 @@
 #include <X11/Xlib.h>
 #include <vector>
 
+// dwindleTile: geometry stays per-screen (screenIndex/screenInfo/struts),
+// but `workspace` is the GLOBAL workspace number shared across all screens.
+// The same ws is passed for every screen, so filtering on
+// (screenIndex == screen && workspace == globalWs) shows the same
+// workspace on all screens simultaneously. Plain loops only.
 void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int screenIndex, int workspace, const ScreenInfo &screenInfo, const ScreenStruts &struts) {
     int start_x = screenInfo.x + struts.left + gap;
     int start_y = screenInfo.y + struts.top + gap;

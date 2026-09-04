@@ -8,9 +8,12 @@ void LayoutManager::tile(Display *display, Window root, ClientManager &clientMan
     clientManager.updateClientNumbers();
     int gap = ConfigManager::instance().get().gap;
 
+    // GLOBAL workspace: one number shared by all screens.
+    // Fetch once so every screen tiles the same workspace atomically.
+    int ws = clientManager.getCurrentWorkspace();
+
     for (const auto &screen : screens)
     {
-        int ws = clientManager.getCurrentWorkspace(screen.screenIndex);
         ScreenStruts struts = getScreenStruts(display, root, screen);
         dwindleTile(display, clientManager.getTiledClients(), gap, screen.screenIndex, ws, screen, struts);
 

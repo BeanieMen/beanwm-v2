@@ -11,7 +11,7 @@ depends=('libx11')
 makedepends=('gcc')
 backup=('etc/beanwm/config')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('d81fc37440cde0121399739d472007a9b4df95181c9c1ba8f53e4f454ce57644')
+sha256sums=('5a0a7f7e3caeba379ef4c6a829126a23adc076a038e77b14920f6a8803608185')
 
 build() {
     if [ -d "$srcdir/$pkgname-$pkgver" ]; then

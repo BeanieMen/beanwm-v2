@@ -22,7 +22,7 @@ struct Client
 {
     Window window;
     int screenIndex;   // Which screen this client belongs to
-    int workspace;     // Workspace number (relative to this screen)
+    int workspace;     // GLOBAL workspace number shared across all screens
     ManagementMode mode;
     int x;
     int y;

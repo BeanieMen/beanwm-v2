@@ -3,13 +3,45 @@
 #include <X11/keysym.h>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
 #include <fstream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 ConfigManager &ConfigManager::instance()
 {
     static ConfigManager inst;
     return inst;
+}
+
+static bool pathExists(const std::string &path)
+{
+    return access(path.c_str(), F_OK) == 0;
+}
+
+static void makeParentDirs(const std::string &path)
+{
+    size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos || slash == 0) return;
+    std::string dir = path.substr(0, slash);
+    std::string cur;
+    size_t start = 0;
+    if (!dir.empty() && dir[0] == '/') { cur = "/"; start = 1; }
+    while (start < dir.size())
+    {
+        size_t pos = dir.find('/', start);
+        std::string part = pos == std::string::npos ? dir.substr(start)
+                                                    : dir.substr(start, pos - start);
+        if (!part.empty())
+        {
+            if (cur.empty()) cur = part;
+            else if (cur == "/") cur += part;
+            else { cur += "/"; cur += part; }
+            mkdir(cur.c_str(), 0755);
+        }
+        if (pos == std::string::npos) break;
+        start = pos + 1;
+    }
 }
 
 std::string ConfigManager::findConfigPath() const
@@ -19,7 +51,7 @@ std::string ConfigManager::findConfigPath() const
     if (xdg && xdg[0] != '\0')
     {
         std::string path = std::string(xdg) + "/beanwm/config";
-        if (std::filesystem::exists(path))
+        if (pathExists(path))
             return path;
     }
 
@@ -29,7 +61,7 @@ std::string ConfigManager::findConfigPath() const
     {
         std::string userPath = home + "/.config/beanwm/config";
         ensureUserConfig(userPath, "/etc/beanwm/config");
-        if (std::filesystem::exists(userPath))
+        if (pathExists(userPath))
             return userPath;
     }
     return "";
@@ -38,20 +70,26 @@ std::string ConfigManager::findConfigPath() const
 void ConfigManager::ensureUserConfig(const std::string &userPath,
                                      const std::string &systemPath) const
 {
-    if (std::filesystem::exists(userPath))
+    if (pathExists(userPath))
         return;
-    if (!std::filesystem::exists(systemPath))
+    if (!pathExists(systemPath))
         return;
 
-    std::error_code ec;
-    std::filesystem::create_directories(
-        std::filesystem::path(userPath).parent_path(), ec);
-    if (ec) return;
+    makeParentDirs(userPath);
 
-    std::filesystem::copy_file(
-        systemPath, userPath,
-        std::filesystem::copy_options::skip_existing, ec);
-    if (!ec)
+    std::ifstream src(systemPath, std::ios::binary);
+    if (!src.is_open()) return;
+    std::ofstream dst(userPath, std::ios::binary);
+    if (!dst.is_open()) return;
+    char buf[8192];
+    while (src)
+    {
+        src.read(buf, sizeof(buf));
+        std::streamsize n = src.gcount();
+        if (n > 0) dst.write(buf, n);
+    }
+    dst.flush();
+    if (dst)
         fprintf(stderr, "[beanwm] Created user config at %s\n", userPath.c_str());
 }
 

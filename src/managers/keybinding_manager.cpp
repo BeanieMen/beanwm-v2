@@ -53,11 +53,14 @@ bool KeybindingManager::parseKeyBinding(const std::string &combo,
 
 void KeybindingManager::setupKeybindings()
 {
-    const auto &binds = ConfigManager::instance().get().binds;
+    const std::vector<std::pair<std::string, std::string>> &binds =
+        ConfigManager::instance().get().binds;
     keybindings.clear();
     keybindings.reserve(binds.size());
-    for (const auto &[combo, action] : binds)
+    for (size_t i = 0; i < binds.size(); ++i)
     {
+        const std::string &combo  = binds[i].first;
+        const std::string &action = binds[i].second;
         KeyBinding binding{};
         if (parseKeyBinding(combo, action, binding))
             keybindings.push_back(binding);
@@ -118,9 +121,8 @@ void KeybindingManager::handleKeyPress(Display *display, XEvent &event, WindowMa
             }
         } else if (b.action == ACTION_FLOAT) {
             Window focused = wm.GetFocusedWindow();
-            wm.getClientManager().switchTileWinToFloating(display, focused, [&wm]() {
-                wm.tile();
-            });
+            wm.getClientManager().switchTileWinToFloating(display, focused);
+            wm.tile();
         } else if (b.action == ACTION_QUIT) {
             wm.quit();
         } else if (b.action == ACTION_RELOAD_CONFIG) {
