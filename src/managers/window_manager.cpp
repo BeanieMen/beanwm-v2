@@ -95,8 +95,6 @@ WindowManager::~WindowManager()
     if (display) XCloseDisplay(display);
 }
 
-// ── Main loop ─────────────────────────────────────────────────────────────
-
 void WindowManager::run()
 {
     while (true)
@@ -105,8 +103,6 @@ void WindowManager::run()
         handleEvent();
     }
 }
-
-// ── Screen detection via Xinerama ─────────────────────────────────────────
 
 void WindowManager::detectScreens()
 {
@@ -154,7 +150,6 @@ void WindowManager::detectScreens()
     clientManager.setCurrentWorkspace(1);
 }
 
-// ── Screen helpers ────────────────────────────────────────────────────────
 
 int WindowManager::screenIndexForPoint(int x, int y) const
 {
@@ -188,8 +183,6 @@ const ScreenInfo *WindowManager::screenForWindow(Window w) const
     return screens.empty() ? nullptr : &screens[0];
 }
 
-// ── State persistence ─────────────────────────────────────────────────────
-
 void WindowManager::saveState()
 {
     std::string path = getStateFilePath(display);
@@ -200,7 +193,6 @@ void WindowManager::saveState()
         return;
     }
 
-    // Single global workspace shared by all screens
     out << "GLOBAL_WS " << clientManager.getCurrentWorkspace() << "\n";
 
     for (const auto &c : clientManager.getTiledClients())
@@ -290,8 +282,6 @@ bool WindowManager::restoreState()
     return true;
 }
 
-// ── Rebuild & Reload ──────────────────────────────────────────────────────
-
 void WindowManager::rebuildAndReload()
 {
     fprintf(stderr, "[beanwm] Rebuild & reload requested...\n");
@@ -351,8 +341,6 @@ void WindowManager::rebuildAndReload()
     fprintf(stderr, "[beanwm] Error: execv failed for %s\n", targetBin.c_str());
 }
 
-// ── quit ──────────────────────────────────────────────────────────────────
-
 void WindowManager::quit()
 {
     processManager.terminateAll();
@@ -360,8 +348,6 @@ void WindowManager::quit()
     display = nullptr;
     std::exit(0);
 }
-
-// ── reloadConfig ──────────────────────────────────────────────────────────
 
 void WindowManager::reloadConfig()
 {
@@ -374,8 +360,6 @@ void WindowManager::reloadConfig()
     tile();
     fprintf(stderr, "[beanwm] Configuration reloaded\n");
 }
-
-// ── Setup ──────────────────────────────────────────────────────────────────
 
 void WindowManager::setup()
 {
@@ -453,7 +437,6 @@ void WindowManager::setup()
     XSync(display, False);
 }
 
-// ── Tile ──────────────────────────────────────────────────────────────────
 
 void WindowManager::tile()
 {
@@ -462,7 +445,6 @@ void WindowManager::tile()
     XFlush(display);
 }
 
-// ── Workspace switching (global: flips ALL screens atomically) ─────────────
 
 void WindowManager::switchWorkspace(int ws)
 {
@@ -475,8 +457,6 @@ void WindowManager::moveToWorkspace(int ws)
     clientManager.moveToWorkspace(display, root, ws);
     tile();
 }
-
-// ── Event dispatch ────────────────────────────────────────────────────────
 
 void WindowManager::handleEvent()
 {
@@ -495,8 +475,6 @@ void WindowManager::handleEvent()
     }
 }
 
-// ── Map Request: place window on correct screen ───────────────────────────
-
 void WindowManager::handleMapRequest()
 {
     Window w = event.xmaprequest.window;
@@ -506,8 +484,6 @@ void WindowManager::handleMapRequest()
         tile();
         return;
     }
-
-    // Determine target screen from pointer position
     Window qroot, qchild;
     int rx, ry, wx, wy;
     unsigned int mask;
@@ -522,8 +498,6 @@ void WindowManager::handleMapRequest()
     currentScreenIndex = si;
     tile();
 }
-
-// ── Configure Request ─────────────────────────────────────────────────────
 
 void WindowManager::handleConfigureRequest()
 {
@@ -548,8 +522,6 @@ void WindowManager::handleConfigureRequest()
         tile();
 }
 
-// ── Destroy Notify ────────────────────────────────────────────────────────
-
 void WindowManager::handleDestroyNotify()
 {
     Window w = event.xdestroywindow.window;
@@ -565,14 +537,10 @@ void WindowManager::handleDestroyNotify()
     }
 }
 
-// ── Key Press ─────────────────────────────────────────────────────────────
-
 void WindowManager::handleKeyPress()
 {
     keybindingManager.handleKeyPress(display, event, *this);
 }
-
-// ── Enter Notify: update active screen and focus ──────────────────────────
 
 void WindowManager::handleEnterNotify()
 {
@@ -586,8 +554,6 @@ void WindowManager::handleEnterNotify()
 
     XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
 }
-
-// ── Button Press: begin drag ──────────────────────────────────────────────
 
 void WindowManager::handleButtonPress()
 {
@@ -614,8 +580,6 @@ void WindowManager::handleButtonPress()
     XSetInputFocus(display, w, RevertToPointerRoot, CurrentTime);
     XRaiseWindow(display, w);
 }
-
-// ── Motion Notify: move/swap ──────────────────────────────────────────────
 
 void WindowManager::handleMotionNotify()
 {
@@ -701,8 +665,6 @@ void WindowManager::handleMotionNotify()
     XSetInputFocus(display, draggedWindow, RevertToPointerRoot, CurrentTime);
 }
 
-// ── Button Release ────────────────────────────────────────────────────────
-
 void WindowManager::handleButtonRelease()
 {
     if (event.xbutton.button != Button1 || draggedWindow == None) return;
@@ -721,8 +683,6 @@ void WindowManager::handleButtonRelease()
     XFlush(display);
 }
 
-// ── Property Notify ───────────────────────────────────────────────────────
-
 void WindowManager::handlePropertyNotify()
 {
     Atom a = event.xproperty.atom;
@@ -730,8 +690,6 @@ void WindowManager::handlePropertyNotify()
         a == XInternAtom(display, "_NET_WM_STRUT", False))
         tile();
 }
-
-// ── Expose ────────────────────────────────────────────────────────────────
 
 void WindowManager::handleExpose()
 {
@@ -742,8 +700,6 @@ void WindowManager::handleExpose()
     }
 }
 
-// ── X Error handler ───────────────────────────────────────────────────────
-
 int WindowManager::handleXError(Display *d, XErrorEvent *e)
 {
     if (e->error_code == BadAccess || e->error_code == BadWindow) return 0;
@@ -753,8 +709,6 @@ int WindowManager::handleXError(Display *d, XErrorEvent *e)
             buf, e->request_code, e->minor_code, e->resourceid);
     return 0;
 }
-
-// ── Input focus query ─────────────────────────────────────────────────────
 
 Window WindowManager::GetFocusedWindow()
 {
