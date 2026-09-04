@@ -1,7 +1,7 @@
 # Maintainer: beanie <jainarjav886@gmail.com>
 
 pkgname=beanwm
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="A minimal dwindle-tiling X11 window manager written in C++23"
 arch=('x86_64')
