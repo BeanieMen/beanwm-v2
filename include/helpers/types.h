@@ -9,10 +9,20 @@ enum ManagementMode
     MODE_FLOATING = 1
 };
 
+struct ScreenInfo
+{
+    int screenIndex;   // X11 screen index (0, 1, 2, ...)
+    int x;             // X position of screen on virtual desktop
+    int y;             // Y position of screen on virtual desktop
+    int width;         // Screen width
+    int height;        // Screen height
+};
+
 struct Client
 {
     Window window;
-    int workspace;
+    int screenIndex;   // Which screen this client belongs to
+    int workspace;     // Workspace number (relative to this screen)
     ManagementMode mode;
     int x;
     int y;
@@ -24,6 +34,7 @@ struct Client
 struct Area
 {
     Client *client;
+    int screenIndex;
     int workspace;
     int x;
     int y;

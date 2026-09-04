@@ -1,6 +1,7 @@
 #pragma once
 
 #include <X11/Xlib.h>
+#include "types.h"
 
 struct ScreenStruts
 {
@@ -11,4 +12,4 @@ struct ScreenStruts
 };
 
 bool isDockWindow(Display *display, Window window);
-ScreenStruts getScreenStruts(Display *display, Window root);
+ScreenStruts getScreenStruts(Display *display, Window root, const ScreenInfo &screen);

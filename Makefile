@@ -18,7 +18,7 @@ CXXFLAGS_DEBUG = $(CXXFLAGS_COMMON) -O0 -g \
                  -fno-omit-frame-pointer
 LDFLAGS_DEBUG  = -fsanitize=address,undefined
 
-LDLIBS  = -lX11
+LDLIBS  = -lX11 -lXinerama
 
 TARGET    = build/beanwm
 BUILD_DIR = build

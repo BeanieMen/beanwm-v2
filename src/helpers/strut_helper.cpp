@@ -34,7 +34,7 @@ bool isDockWindow(Display *display, Window window)
     return is_dock;
 }
 
-ScreenStruts getScreenStruts(Display *display, Window root)
+ScreenStruts getScreenStruts(Display *display, Window root, const ScreenInfo &screen)
 {
     ScreenStruts struts{};
     Atom net_wm_strut_partial = XInternAtom(display, "_NET_WM_STRUT_PARTIAL", False);
@@ -47,12 +47,18 @@ ScreenStruts getScreenStruts(Display *display, Window root)
     if (!XQueryTree(display, root, &root, &parent, &children, &nchildren) || !children)
         return struts;
 
-    int screen_height = DisplayHeight(display, DefaultScreen(display));
-    int screen_width = DisplayWidth(display, DefaultScreen(display));
-
     for (unsigned int i = 0; i < nchildren; ++i)
     {
         Window w = children[i];
+        XWindowAttributes wa{};
+        if (!XGetWindowAttributes(display, w, &wa) || wa.map_state != IsViewable)
+            continue;
+
+        // Only consider docks located on or overlapping this screen
+        if (wa.x + wa.width <= screen.x || wa.x >= screen.x + screen.width ||
+            wa.y + wa.height <= screen.y || wa.y >= screen.y + screen.height)
+            continue;
+
         Atom actual_type;
         int actual_format;
         unsigned long nitems, bytes_after;
@@ -88,21 +94,17 @@ ScreenStruts getScreenStruts(Display *display, Window root)
             has_strut = true;
         }
 
-        // Fallback: If it's a dock window mapped on screen without explicit strut property
+        // Fallback: If it's a dock window mapped on this monitor without explicit strut property
         if (!has_strut && isDockWindow(display, w))
         {
-            XWindowAttributes wa{};
-            if (XGetWindowAttributes(display, w, &wa) && wa.map_state == IsViewable)
-            {
-                if (wa.y == 0 && wa.height > struts.top && wa.height < screen_height / 2)
-                    struts.top = wa.height;
-                else if (wa.y + wa.height >= screen_height - 10 && wa.height > struts.bottom)
-                    struts.bottom = wa.height;
-                else if (wa.x == 0 && wa.width > struts.left && wa.width < screen_width / 2)
-                    struts.left = wa.width;
-                else if (wa.x + wa.width >= screen_width - 10 && wa.width > struts.right)
-                    struts.right = wa.width;
-            }
+            if (wa.y == screen.y && wa.height > struts.top && wa.height < screen.height / 2)
+                struts.top = wa.height;
+            else if (wa.y + wa.height >= screen.y + screen.height - 10 && wa.height > struts.bottom)
+                struts.bottom = wa.height;
+            else if (wa.x == screen.x && wa.width > struts.left && wa.width < screen.width / 2)
+                struts.left = wa.width;
+            else if (wa.x + wa.width >= screen.x + screen.width - 10 && wa.width > struts.right)
+                struts.right = wa.width;
         }
     }
 

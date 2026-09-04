@@ -2,33 +2,32 @@
 #include <X11/Xlib.h>
 #include <vector>
 
-void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int workspace, const ScreenStruts &struts) {
-    int screen = DefaultScreen(display);
-    int screen_width = DisplayWidth(display, screen);
-    int screen_height = DisplayHeight(display, screen);
-
-    int start_x = struts.left + gap;
-    int start_y = struts.top + gap;
-    int sw = screen_width - struts.left - struts.right - 2 * gap;
-    int sh = screen_height - struts.top - struts.bottom - 2 * gap;
+void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int screenIndex, int workspace, const ScreenInfo &screenInfo, const ScreenStruts &struts) {
+    int start_x = screenInfo.x + struts.left + gap;
+    int start_y = screenInfo.y + struts.top + gap;
+    int sw = screenInfo.width - struts.left - struts.right - 2 * gap;
+    int sh = screenInfo.height - struts.top - struts.bottom - 2 * gap;
     if (sw < 1) sw = 1;
     if (sh < 1) sh = 1;
 
     std::vector<Client*> workspace_clients;
     workspace_clients.reserve(clients.size());
     for (auto &client : clients)
-        if (client.workspace == workspace)
+        if (client.screenIndex == screenIndex && client.workspace == workspace)
             workspace_clients.push_back(&client);
-    if (workspace_clients.empty()) return;
 
     for (auto &c : clients) {
-        if (c.workspace == workspace) XMapWindow(display, c.window);
-        else XUnmapWindow(display, c.window);
+        if (c.screenIndex == screenIndex) {
+            if (c.workspace == workspace) XMapWindow(display, c.window);
+            else XUnmapWindow(display, c.window);
+        }
     }
+
+    if (workspace_clients.empty()) return;
 
     std::vector<Area> areas;
     areas.reserve(workspace_clients.size());
-    areas.push_back({workspace_clients[0], workspace, start_x, start_y, sw, sh});
+    areas.push_back({workspace_clients[0], screenIndex, workspace, start_x, start_y, sw, sh});
     if (areas.back().width < 1) areas.back().width = 1;
     if (areas.back().height < 1) areas.back().height = 1;
 
@@ -40,14 +39,14 @@ void dwindleTile(Display* display, std::vector<Client>& clients, int gap, int wo
             int ow = old.width - nw - gap;
             if (ow < 1) { ow = 1; nw = old.width - gap - ow; }
             areas.back().width = nw;
-            areas.push_back({workspace_clients[i], workspace, old.x + nw + gap, old.y, ow, old.height});
+            areas.push_back({workspace_clients[i], screenIndex, workspace, old.x + nw + gap, old.y, ow, old.height});
         } else {
             int nh = (old.height - gap) / 2;
             if (nh < 1) nh = old.height / 2;
             int oh = old.height - nh - gap;
             if (oh < 1) { oh = 1; nh = old.height - gap - oh; }
             areas.back().height = nh;
-            areas.push_back({workspace_clients[i], workspace, old.x, old.y + nh + gap, old.width, oh});
+            areas.push_back({workspace_clients[i], screenIndex, workspace, old.x, old.y + nh + gap, old.width, oh});
         }
     }
 

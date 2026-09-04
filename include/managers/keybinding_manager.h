@@ -16,6 +16,7 @@ enum KeyAction
     ACTION_EXEC             = 4,
     ACTION_FLOAT            = 5,
     ACTION_RELOAD_CONFIG    = 6,
+    ACTION_REBUILD_RELOAD   = 7,
 };
 
 struct KeyBinding
